@@ -46,7 +46,7 @@ public sealed class HttpReplaySource(HttpClient http, SiteCatalog catalog)
         string folder = SiteCatalog.BundlesFolder + entry.Path;
 
         byte[] manifestJson = await BundleDownload.GetAsync(
-            http, folder + BundleFiles.Manifest, id, MaxFileBytes, onRead: null, cancellationToken);
+            http, folder + BundleFiles.Manifest, id, MaxFileBytes, expectedBytes: null, onRead: null, cancellationToken);
         BundleManifestDto manifest = Read(id, () => ReplayBundleReader.ReadManifest(manifestJson));
         progress.Report(ManifestDone);
 
@@ -60,7 +60,8 @@ public sealed class HttpReplaySource(HttpClient http, SiteCatalog catalog)
             http,
             folder + BundleFiles.Positions,
             id,
-            expected,
+            maxBytes: expected,
+            expectedBytes: expected,
             read => progress.Report(ManifestDone + ((ChannelsDone - ManifestDone) * read / expected)),
             cancellationToken);
 

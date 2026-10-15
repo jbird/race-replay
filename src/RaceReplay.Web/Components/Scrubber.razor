@@ -4,54 +4,43 @@
 @inject ReplaySessionHost Host
 @inject ReplayStore Store
 
+@* max is rounded up so the last whole step reaches the end; the clock clamps the seek to the duration. *@
 <input type="range" class="scrubber" aria-label="Replay position"
-       min="0" max="@Invariant(State.Duration)" step="1"
-       value="@Invariant(State.Position)"
-       aria-valuetext="@TimeFormat.Spoken(State.Position)"
-       @onpointerdown="BeginScrub"
-       @oninput="Seek"
-       @onpointerup="EndScrub"
-       @onpointercancel="EndScrub"
-       @onchange="EndScrub" />
+       min="0" max="@InvariantNumber.Format(Math.Ceiling(State.Duration))" step="1"
+       value="@InvariantNumber.Format(State.Position)"
+       aria-valuetext="@_valueText"
+       @onpointerdown="() => _gesture.Begin(Host.Control)"
+       @oninput="e => ScrubGesture.Seek(Host.Control, e.Value)"
+       @onpointerup="() => _gesture.End(Host.Control)"
+       @onpointercancel="() => _gesture.End(Host.Control)"
+       @onchange="() => _gesture.End(Host.Control)" />
 
 @code {
-    private bool _scrubbing;
+    private readonly ScrubGesture _gesture = new();
+    private string _valueText = string.Empty;
 
     private ReplayViewState State => Store.State;
 
-    protected override void OnInitialized() => Store.Changed += OnChanged;
-
-    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
-
-    private void BeginScrub()
+    protected override void OnInitialized()
     {
-        if (!_scrubbing)
-        {
-            _scrubbing = true;
-            Host.Control?.BeginScrub();
-        }
+        Store.Changed += OnChanged;
+        UpdateValueText();
     }
 
-    private void Seek(ChangeEventArgs e)
+    private void OnChanged()
     {
-        if (double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double position)
-            && double.IsFinite(position))
-        {
-            Host.Control?.Seek(position);
-        }
+        UpdateValueText();
+        _ = InvokeAsync(StateHasChanged);
     }
 
-    // Pointer up, cancel and change can each end a drag; only the first counts.
-    private void EndScrub()
+    // Only while paused or scrubbing: a focused slider's value text changing 10 times a second floods screen readers.
+    private void UpdateValueText()
     {
-        if (_scrubbing)
+        if (!State.IsPlaying || _gesture.IsActive)
         {
-            _scrubbing = false;
-            Host.Control?.EndScrub();
+            _valueText = TimeFormat.Spoken(State.Position);
         }
     }
-
-    private static string Invariant(double value) => value.ToString(CultureInfo.InvariantCulture);
 
     public void Dispose() => Store.Changed -= OnChanged;
 }

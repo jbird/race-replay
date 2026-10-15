@@ -18,13 +18,22 @@ async function frameCallback() {
 export function start() {
   stop();
   const current = generation;
+  let failed = false;
   frameCallback().then(
     (callback) => {
       if (current !== generation) return; // stopped while the exports were resolving
       const tick = (timestamp) => {
         if (current !== generation) return;
-        callback(timestamp);
-        handle = requestAnimationFrame(tick);
+        handle = requestAnimationFrame(tick); // first, so one failing frame doesn't stop the loop
+        try {
+          callback(timestamp);
+        } catch (error) {
+          if (!failed) { // report once, not 60 times a second
+            failed = true;
+            console.error('Race Replay: a frame failed.', error);
+            document.getElementById('blazor-error-ui')?.style.setProperty('display', 'block');
+          }
+        }
       };
       handle = requestAnimationFrame(tick);
     },

@@ -138,6 +138,22 @@ public sealed class HttpReplaySourceTests : IDisposable
     }
 
     [Fact]
+    public async Task Load_BodyReadFailsAfterCancellation_ThrowsOperationCanceledNotUnavailable()
+    {
+        using CancellationTokenSource cancel = new();
+        _site.ServeStream(FakeBundleSite.DemoFolder + BundleFiles.Positions, () => new FailingStream(() =>
+        {
+            cancel.Cancel(); // the page navigated away; the browser aborts the fetch
+            throw new IOException("The operation was aborted.");
+        }));
+        HttpClient http = _site.CreateClient();
+        HttpReplaySource source = new(http, new SiteCatalog(http));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => source.LoadAsync(FakeBundleSite.DemoId, new RecordingProgress(), cancel.Token));
+    }
+
+    [Fact]
     public async Task Load_Twice_FetchesTheCatalogueOnce()
     {
         HttpClient http = _site.CreateClient();
@@ -163,6 +179,42 @@ public sealed class HttpReplaySourceTests : IDisposable
         Assert.Equal(FakeBundleSite.DemoId, Assert.Single(sessions.Sessions).Id);
     }
 
+
+    /// <summary>A response body whose first read runs <c>onRead</c>, which throws.</summary>
+    private sealed class FailingStream(Action onRead) : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            onRead();
+            return 0;
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            onRead();
+            return ValueTask.FromResult(0);
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
 
     private Task<ReplaySession> Load(string id, IProgress<double>? progress = null)
     {

@@ -9,11 +9,19 @@ internal static class BundleDownload
     /// <param name="path">The file, relative to the site root.</param>
     /// <param name="replayId">The replay being loaded, for error reports; <see langword="null"/> for the catalogue.</param>
     /// <param name="maxBytes">Largest size accepted, so a bad manifest or server can't make the app allocate without limit.</param>
+    /// <param name="expectedBytes">The size when the caller knows it, so the buffer is allocated once; otherwise <c>Content-Length</c> is the hint.</param>
     /// <param name="onRead">Called with the bytes read so far after each chunk.</param>
     /// <param name="cancellationToken">Cancels the download.</param>
     /// <exception cref="ReplayLoadException">The request failed, or the file is larger than <paramref name="maxBytes"/>.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
     public static async Task<byte[]> GetAsync(
-        HttpClient http, string path, string? replayId, long maxBytes, Action<long>? onRead, CancellationToken cancellationToken)
+        HttpClient http,
+        string path,
+        string? replayId,
+        long maxBytes,
+        long? expectedBytes,
+        Action<long>? onRead,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -23,8 +31,10 @@ internal static class BundleDownload
                 throw Failed(ReplayLoadFailure.Unavailable, $"{path}: HTTP {(int)response.StatusCode} {response.ReasonPhrase}", replayId);
             }
 
+            // WebAssembly memory never shrinks, so avoid MemoryStream's doubling and a final copy when the size is known.
+            long capacity = Math.Clamp(expectedBytes ?? response.Content.Headers.ContentLength ?? 0, 0, maxBytes);
             await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using MemoryStream buffer = new();
+            using MemoryStream buffer = new((int)capacity);
             byte[] chunk = new byte[ChunkBytes];
             int read;
             while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
@@ -38,7 +48,12 @@ internal static class BundleDownload
                 onRead?.Invoke(buffer.Length);
             }
 
-            return buffer.ToArray();
+            return buffer.Length == buffer.Capacity ? buffer.GetBuffer() : buffer.ToArray();
+        }
+        catch (Exception e) when (cancellationToken.IsCancellationRequested && e is HttpRequestException or IOException)
+        {
+            // A cancelled browser fetch can surface as a network error; report it as the cancellation it is.
+            throw new OperationCanceledException($"{path}: the download was cancelled.", e, cancellationToken);
         }
         catch (HttpRequestException e)
         {

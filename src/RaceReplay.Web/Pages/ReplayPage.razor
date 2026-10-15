@@ -41,7 +41,7 @@
 @code {
     private const string TrackMapId = "track-map";
 
-    private CancellationTokenSource? _load;
+    private readonly LatestLoad _loads = new();
     private int? _seed;
     private ReplaySession? _replay;
     private bool _opened;
@@ -76,55 +76,51 @@
         // The track map's host element exists only after the first render with the replay loaded.
         if (_replay is not null && !_opened)
         {
-            Host.Open(_replay, TrackMapId, DeepLink.ParseTime(Time));
+            // Marked first, so a failure shows once as an error rather than being retried on every render.
             _opened = true;
+            try
+            {
+                Host.Open(_replay, TrackMapId, DeepLink.ParseTime(Time));
+            }
+            catch (Exception e)
+            {
+                _error = new ReplayLoadException($"The track map couldn't start: {e.Message}", e)
+                {
+                    Failure = ReplayLoadFailure.Unavailable,
+                    ReplayId = ReplayId,
+                };
+            }
+
             StateHasChanged();
         }
     }
 
     private async Task LoadAsync()
     {
-        CancelLoad();
-        CancellationTokenSource load = _load = new CancellationTokenSource();
         Host.Close();
         (_replay, _opened, _progress, _error) = (null, false, 0, null);
 
-        try
-        {
-            Progress<double> progress = new(p =>
+        // A superseded or cancelled load returns null and leaves the newer load's state alone.
+        LoadOutcome? outcome = await _loads.RunAsync(token => Source.LoadAsync(
+            ReplayId,
+            new Progress<double>(p =>
             {
-                if (!load.IsCancellationRequested)
+                if (!token.IsCancellationRequested)
                 {
                     _progress = Math.Max(_progress, p);
                     StateHasChanged();
                 }
-            });
-            ReplaySession replay = await Source.LoadAsync(ReplayId, progress, load.Token);
-            if (!load.IsCancellationRequested)
-            {
-                _replay = replay;
-            }
-        }
-        catch (ReplayLoadException e) when (!load.IsCancellationRequested)
+            }),
+            token));
+        if (outcome is not null)
         {
-            _error = e;
+            (_replay, _error) = (outcome.Replay, outcome.Error);
         }
-        catch (OperationCanceledException) when (load.IsCancellationRequested)
-        {
-            // Superseded by a newer load, or the page closed.
-        }
-    }
-
-    private void CancelLoad()
-    {
-        _load?.Cancel();
-        _load?.Dispose();
-        _load = null;
     }
 
     public void Dispose()
     {
-        CancelLoad();
+        _loads.Dispose();
         Host.Close();
     }
 }

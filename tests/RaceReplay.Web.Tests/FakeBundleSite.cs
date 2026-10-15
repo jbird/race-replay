@@ -49,6 +49,9 @@ internal sealed class FakeBundleSite : HttpMessageHandler
 
     public void ServeFailure(string path, Exception failure) => _routes[path] = () => throw failure;
 
+    public void ServeStream(string path, Func<Stream> body) =>
+        _routes[path] = () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(body()) };
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

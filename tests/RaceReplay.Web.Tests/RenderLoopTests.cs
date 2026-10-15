@@ -38,16 +38,15 @@ public sealed class RenderLoopTests
     }
 
     [Fact]
-    public void Tick_Paused_KeepsDrawingTheSameFrame()
+    public void Tick_Paused_DrawsOnceThenSkipsUnchangedFrames()
     {
         _clock.Seek(5);
 
         _loop.Tick(1_000);
-        double[] first = [.. _map.LastFrame];
+        _loop.Tick(1_016);
         _loop.Tick(2_000);
 
-        Assert.Equal(2, _map.FramesDrawn);
-        Assert.Equal(first, _map.LastFrame);
+        Assert.Equal(1, _map.FramesDrawn);
         Assert.Equal(SampleAt(5), _map.LastFrame);
     }
 
@@ -59,6 +58,7 @@ public sealed class RenderLoopTests
         _clock.Seek(12.5);
         _loop.Tick(1_016);
 
+        Assert.Equal(2, _map.FramesDrawn);
         Assert.Equal(SampleAt(12.5), _map.LastFrame); // NFR-02: within one frame
     }
 

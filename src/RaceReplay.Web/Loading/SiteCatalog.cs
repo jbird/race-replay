@@ -22,7 +22,7 @@ public sealed class SiteCatalog(HttpClient http)
         if (_catalog is null)
         {
             byte[] json = await BundleDownload.GetAsync(
-                http, BundlesFolder + ReplayCatalog.FileName, replayId: null, MaxBytes, onRead: null, cancellationToken);
+                http, BundlesFolder + ReplayCatalog.FileName, replayId: null, MaxBytes, expectedBytes: null, onRead: null, cancellationToken);
             try
             {
                 _catalog = ReplayCatalog.Deserialize(json);

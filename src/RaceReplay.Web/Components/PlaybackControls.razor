@@ -8,14 +8,15 @@
         <span aria-hidden="true">@(State.IsPlaying ? "❚❚" : "▶")</span>
     </button>
 
-    <select class="rate" aria-label="Playback rate" value="@Invariant(State.Rate)" @onchange="SetRate">
+    <select class="rate" aria-label="Playback rate" value="@InvariantNumber.Format(State.Rate)" @onchange="SetRate">
         @foreach (double rate in Host.Options.Rates)
         {
-            <option value="@Invariant(rate)">@Invariant(rate)×</option>
+            <option value="@InvariantNumber.Format(rate)">@InvariantNumber.Format(rate)×</option>
         }
     </select>
 
-    <output class="time-readout">@TimeFormat.Clock(State.Position) / @TimeFormat.Clock(State.Duration)</output>
+    @* A plain span, not <output>: that is a live region, and this changes up to 10 times a second. *@
+    <span class="time-readout">@TimeFormat.Clock(State.Position) / @TimeFormat.Clock(State.Duration)</span>
 </div>
 
 @code {
@@ -39,14 +40,11 @@
 
     private void SetRate(ChangeEventArgs e)
     {
-        if (double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double rate)
-            && Host.Options.Rates.Contains(rate))
+        if (InvariantNumber.TryParse(e.Value, out double rate) && Host.Options.Rates.Contains(rate))
         {
             Host.Control?.SetRate(rate);
         }
     }
-
-    private static string Invariant(double value) => value.ToString(CultureInfo.InvariantCulture);
 
     public void Dispose() => Store.Changed -= OnChanged;
 }

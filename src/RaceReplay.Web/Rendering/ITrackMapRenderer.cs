@@ -7,8 +7,8 @@ public interface ITrackMapRenderer
     void Initialise(string hostElementId, TrackMapScene scene);
 
     /// <summary>
-    /// Draws the cars from a <see cref="Playback.FrameSampler"/> frame. The frame is only valid during the call
-    /// (docs/05 §5.2).
+    /// Draws the cars from a <see cref="Playback.FrameSampler"/> frame, and keeps a copy to repaint after a resize: the
+    /// loop only sends frames when the position changes. The frame is only valid during the call (docs/05 §5.2).
     /// </summary>
     void DrawFrame(Span<double> frame, int stride);
 

@@ -30,8 +30,10 @@ if (OperatingSystem.IsBrowser())
         .AddScoped<IFrameScheduler, AnimationFrameScheduler>();
 
     // Relative to _framework/, where the runtime loads from; also correct under the Pages sub-path (docs/05 §2).
-    await JSHost.ImportAsync(RenderLoopInterop.Module, "../js/renderLoop.js");
-    await JSHost.ImportAsync(TrackMapInterop.Module, "../js/trackMap.js");
+    // Fetched in parallel, so startup waits for one round trip rather than two.
+    await Task.WhenAll(
+        JSHost.ImportAsync(RenderLoopInterop.Module, "../js/renderLoop.js"),
+        JSHost.ImportAsync(TrackMapInterop.Module, "../js/trackMap.js"));
 }
 
 await builder.Build().RunAsync();

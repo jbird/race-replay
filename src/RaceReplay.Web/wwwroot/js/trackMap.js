@@ -1,5 +1,6 @@
 // Track map on two stacked canvases (docs/05 §6). The static layer (track, start/finish line) is drawn on resize;
-// the car layer every frame. State is limited to the canvases, the scene and the view transform.
+// the car layer whenever .NET sends a frame, and again after a resize. State is limited to the canvases, the scene,
+// the view transform and the last frame.
 
 const carRadius = 6;    // CSS px
 const labelFont = 11;   // CSS px
@@ -11,7 +12,9 @@ let carCanvas = null;
 let observer = null;
 let scene = null;
 let view = null;
-let frame = new Float64Array(0);
+let frame = new Float64Array(0); // the last frame drawn, kept to repaint after a resize
+let stride = 0;
+let dprQuery = null;
 const placed = [];      // label boxes placed this frame: [x, y, w, h] flattened
 let labelX = 0, labelY = 0;
 
@@ -31,17 +34,46 @@ export function init(hostId, centreline, rotationDegrees, acronyms, colours, out
     dashed: dashed.map(d => d === 1),
     labelWidths: new Float64Array(acronyms.length),
   };
-  frame = new Float64Array(acronyms.length * 4);
+  frame = new Float64Array(0);
+  stride = 0;
   observer = new ResizeObserver(resize);
   observer.observe(host);
+  watchDevicePixelRatio();
   resize();
 }
 
 // frameView is a MemoryView over .NET memory, valid only during this call: copy it, never keep it.
-export function drawCars(frameView, stride) {
-  if (!scene || !view) return;
+export function drawCars(frameView, frameStride) {
+  if (!scene) return;
+  if (frame.length !== frameView.length) frame = new Float64Array(frameView.length);
   frameView.copyTo(frame);
+  stride = frameStride;
+  paint();
+}
 
+export function clear() {
+  observer?.disconnect();
+  dprQuery?.removeEventListener('change', onDevicePixelRatioChange);
+  trackCanvas?.remove();
+  carCanvas?.remove();
+  host = trackCanvas = carCanvas = observer = dprQuery = scene = view = null;
+}
+
+// ResizeObserver misses a devicePixelRatio change without a CSS size change, e.g. moving to another monitor.
+function watchDevicePixelRatio() {
+  dprQuery?.removeEventListener('change', onDevicePixelRatioChange);
+  dprQuery = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  dprQuery.addEventListener('change', onDevicePixelRatioChange);
+}
+
+function onDevicePixelRatioChange() {
+  watchDevicePixelRatio();
+  resize();
+}
+
+// Draws the cars from the last frame received.
+function paint() {
+  if (!scene || !view || stride === 0) return;
   const ctx = carCanvas.getContext('2d');
   const { a, b, c, d, e, f, dpr, dash, solid, labelHalo, labelColour } = view;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -52,7 +84,7 @@ export function drawCars(frameView, stride) {
   placed.length = 0;
 
   const r = carRadius * dpr;
-  for (let i = 0, o = 0; i < scene.acronyms.length; i++, o += stride) {
+  for (let i = 0, o = 0; i < scene.acronyms.length && o + 2 < frame.length; i++, o += stride) {
     if (frame[o + 2] === 0) continue; // not visible
     const x = frame[o], y = frame[o + 1];
     const sx = a * x + c * y + e;
@@ -75,13 +107,6 @@ export function drawCars(frameView, stride) {
     ctx.fillStyle = labelColour;
     ctx.fillText(scene.acronyms[i], labelX, labelY);
   }
-}
-
-export function clear() {
-  observer?.disconnect();
-  trackCanvas?.remove();
-  carCanvas?.remove();
-  host = trackCanvas = carCanvas = observer = scene = view = null;
 }
 
 function addCanvas(className) {
@@ -117,6 +142,7 @@ function resize() {
   ctx.font = view.font;
   scene.acronyms.forEach((acronym, i) => { scene.labelWidths[i] = ctx.measureText(acronym).width; });
   drawTrack(style);
+  paint(); // resizing cleared the car layer, and .NET only sends frames when the position changes
 }
 
 // Rotate, flip Y (track is Y-up, canvas Y-down) and scale the rotated bounds into the canvas, centred.

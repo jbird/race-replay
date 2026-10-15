@@ -10,10 +10,12 @@ repo="${1:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 gh repo edit "$repo" --enable-squash-merge --enable-merge-commit=false --enable-rebase-merge=false \
   --delete-branch-on-merge --enable-discussions --enable-wiki=false
 
-# Actions: read-only GITHUB_TOKEN by default; workflows can't approve PRs; GitHub-owned actions only
+# Actions: read-only GITHUB_TOKEN by default; workflows can't approve PRs; GitHub-owned actions only,
+# pinned to full commit SHAs
 gh api -X PUT "repos/$repo/actions/permissions/workflow" \
   -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
-gh api -X PUT "repos/$repo/actions/permissions" -F enabled=true -f allowed_actions=selected
+gh api -X PUT "repos/$repo/actions/permissions" -F enabled=true -f allowed_actions=selected \
+  -F sha_pinning_required=true
 gh api -X PUT "repos/$repo/actions/permissions/selected-actions" \
   -F github_owned_allowed=true -F verified_allowed=false
 

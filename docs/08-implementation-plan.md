@@ -98,7 +98,7 @@ gh pr create --fill
 **Then, still within M0:**
 
 - [ ] Add Race Replay's workflows: `deploy-pages.yml`, plus macOS and the `publish-site` job in `ci.yml` ([07 §6](07-repository-ci-and-delivery.md#6-github-actions-workflows)). Leave the demo-race step of `assemble-site.sh` with an empty `config/demo-races.json` until M1.
-- [ ] Pin every action to its full commit SHA with a version comment. Turn on the repository policy that requires it, and the rest of the manual checklist ([07 §5.3](07-repository-ci-and-delivery.md#53-manual-checklist)).
+- [ ] Pin every action to its full commit SHA with a version comment; `setup-github.sh` turns on the repository policy that requires it. Complete the manual checklist ([07 §5.3](07-repository-ci-and-delivery.md#53-manual-checklist)).
 - [ ] Add `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/release.yml` and `ISSUE_TEMPLATE/config.yml`. Enable Discussions categories.
 - [ ] Do **not** set `HOSTED_BUNDLES` or create a `data` branch (ADR-0008).
 - [ ] Add `AssemblyMarker` classes and the architecture tests. They pass immediately and guard everything after.

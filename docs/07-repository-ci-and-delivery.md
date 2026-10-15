@@ -209,10 +209,12 @@ repo="${1:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 gh repo edit "$repo" --enable-squash-merge --enable-merge-commit=false --enable-rebase-merge=false \
   --delete-branch-on-merge --enable-discussions --enable-wiki=false
 
-# Actions: read-only GITHUB_TOKEN by default; workflows can't approve PRs; GitHub-owned actions only
+# Actions: read-only GITHUB_TOKEN by default; workflows can't approve PRs; GitHub-owned actions only,
+# pinned to full commit SHAs
 gh api -X PUT "repos/$repo/actions/permissions/workflow" \
   -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
-gh api -X PUT "repos/$repo/actions/permissions" -F enabled=true -f allowed_actions=selected
+gh api -X PUT "repos/$repo/actions/permissions" -F enabled=true -f allowed_actions=selected \
+  -F sha_pinning_required=true
 gh api -X PUT "repos/$repo/actions/permissions/selected-actions" \
   -F github_owned_allowed=true -F verified_allowed=false
 
@@ -304,7 +306,6 @@ These settings are set in the UI, either because the API fields weren't confirme
 
 | Setting | Where | Value |
 |---|---|---|
-| Require actions pinned to full commit SHAs | Settings → Actions → General | On (policy available since August 2025) |
 | Release immutability | Settings → General → Releases | On (§9.1) |
 | `github-pages` environment | Settings → Environments | Deployment branches: `main` only |
 | Fork pull request workflows | Settings → Actions → General | Require approval for first-time contributors (default) |
@@ -799,7 +800,7 @@ jobs:
 |---|---|
 | Least-privilege tokens | Repository default `GITHUB_TOKEN` is read-only (§5.1). Workflows declare `contents: read` at the top and elevate per job (§6.1). |
 | Trusted actions only | Actions policy allows GitHub-owned actions only (`actions/*`, `github/*`). Every workflow here uses nothing else. |
-| Immutable action references | Every `uses:` is pinned to a full commit SHA. The repository policy that requires this is on (§5.3). |
+| Immutable action references | Every `uses:` is pinned to a full commit SHA. `setup-github.sh` turns on the repository policy that requires this (§5.1). |
 | No untrusted code with secrets | No `pull_request_target`, and no secrets at all. Fork PRs need approval for first-time contributors. |
 | Code scanning | CodeQL default setup: C#, JavaScript (the JS shims), and GitHub Actions workflows, which CodeQL has built-in queries for |
 | Secrets | Secret scanning with push protection. The project needs no secrets, so any finding is a mistake. |

@@ -1,0 +1,36 @@
+@* What went wrong loading a replay, and what the viewer can do about it (docs/05 §9.3). *@
+
+<div class="notice notice-error" role="alert">
+    @switch (Error.Failure)
+    {
+        case ReplayLoadFailure.NotFound:
+            <p>There's no replay at this address.</p>
+            <p><a href="">Choose a race from the catalogue</a>.</p>
+            break;
+
+        case ReplayLoadFailure.NewerVersion:
+            <p>This replay needs a newer version of the app.</p>
+            <p>Reload the page without the cache (Ctrl+Shift+R, or Cmd+Shift+R on a Mac) to get the latest version.</p>
+            break;
+
+        case ReplayLoadFailure.Corrupt:
+            <p>Replay <code>@Error.ReplayId</code> is damaged and can't be shown.</p>
+            <p class="details">@Error.Message</p>
+            <p><a href="https://github.com/jbird/race-replay/issues/new/choose">Report the problem</a> with the replay id and the details above.</p>
+            break;
+
+        default:
+            <p>Couldn't load this replay.</p>
+            <p class="details">@Error.Message</p>
+            <button type="button" @onclick="OnRetry">Retry</button>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required ReplayLoadException Error { get; set; }
+
+    [Parameter]
+    public EventCallback OnRetry { get; set; }
+}

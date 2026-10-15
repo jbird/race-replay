@@ -105,9 +105,9 @@ race-replay/
    ├─ RaceReplay.Synthetic.Tests/
    ├─ RaceReplay.Playback.Tests/
    ├─ RaceReplay.Cli.Tests/
-   ├─ RaceReplay.Web.Tests/       # Component tests (added in M5)
+   ├─ RaceReplay.Web.Tests/       # Loading, render loop and session host (M1); bUnit component tests (M5)
    ├─ RaceReplay.Architecture.Tests/
-   └─ RaceReplay.TestKit/         # Contract base classes, fixture loader, assertion helpers (not a test project)
+   └─ RaceReplay.TestKit/         # Contract base classes, test replays, fixture loader, assertion helpers (not a test project)
 ```
 
 ### 4.2 Allowed references

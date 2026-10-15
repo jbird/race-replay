@@ -327,13 +327,13 @@ export function stop() { cancelAnimationFrame(handle); }
 ```js
 // wwwroot/js/trackMap.js (excerpt)
 export function drawCars(frameView, stride, focusIndex) {
-  const f = frameView;                     // MemoryView: read now, never store
+  frameView.copyTo(frame);                 // MemoryView: copy now into a reused Float64Array, never store the view
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.setTransform(view.a, view.b, view.c, view.d, view.e, view.f);   // world → screen
   for (let c = 0, o = 0; c < drivers.length; c++, o += stride) {
-    if (f.get(o + 2) === 0) continue;      // not visible
-    drawCar(f.get(o), f.get(o + 1), drivers[c], c === focusIndex);
+    if (frame[o + 2] === 0) continue;      // not visible
+    const x = frame[o], y = frame[o + 1];  // world → screen with the view transform, so circles and labels stay upright
+    drawCar(view.a * x + view.c * y + view.e, view.b * x + view.d * y + view.f, drivers[c], c === focusIndex);
   }
 }
 ```

@@ -1,0 +1,8 @@
+@* Hosts the track map's canvases, which trackMap.js creates and sizes (docs/05 §6). *@
+
+<div id="@ElementId" class="track-map" role="img" aria-label="Track map with every car's position"></div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string ElementId { get; set; }
+}

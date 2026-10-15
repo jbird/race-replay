@@ -1,18 +1,212 @@
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+:root {
+    color-scheme: light dark;
+    --page-bg: #f6f7f9;
+    --page-fg: #1c1f24;
+    --muted: #5a6270;
+    --border: #d6dae1;
+    --accent: #1b6ec2;
+    --error-bg: #fdecec;
+    --error-fg: #8a1c1c;
+    --map-bg: #1d2128;
+    --map-track: #3b424f;
+    --map-track-edge: #8b94a3;
+    --map-start-finish: #ffffff;
+    --map-label: #ffffff;
+    --map-label-halo: #11141a;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--page-bg);
+    color: var(--page-fg);
 }
 
-.invalid {
-    outline: 1px solid red;
+@media (prefers-color-scheme: dark) {
+    :root {
+        --page-bg: #14171c;
+        --page-fg: #e6e8ec;
+        --muted: #a0a8b5;
+        --border: #2e343e;
+        --accent: #6aa8ff;
+        --error-bg: #3a1d1d;
+        --error-fg: #ffc9c9;
+        --map-bg: #0d0f13;
+    }
 }
 
-.validation-message {
-    color: red;
+body {
+    margin: 0;
+    padding: 0 1rem;
 }
+
+main {
+    max-width: 80rem;
+    margin: 0 auto;
+}
+
+a {
+    color: var(--accent);
+}
+
+button,
+select {
+    font: inherit;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--page-bg);
+    color: var(--page-fg);
+    cursor: pointer;
+}
+
+:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.lede {
+    font-size: 1.1rem;
+    color: var(--muted);
+}
+
+.hint {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.race-list {
+    padding-left: 1.25rem;
+    line-height: 1.8;
+}
+
+.notice {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+}
+
+.notice-error {
+    background: var(--error-bg);
+    color: var(--error-fg);
+}
+
+.notice .details {
+    font-family: ui-monospace, monospace;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+/* Replay page */
+
+.replay {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+}
+
+.replay-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.replay-header h1 {
+    font-size: 1.35rem;
+    margin: 0;
+}
+
+.replay-stage {
+    position: relative;
+    height: min(70vh, 48rem);
+    min-height: 18rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: var(--map-bg);
+}
+
+.track-map {
+    position: absolute;
+    inset: 0;
+}
+
+.track-map canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: #e6e8ec;
+}
+
+.loading-overlay progress {
+    width: min(20rem, 70%);
+}
+
+.playback-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.play-pause {
+    min-width: 3rem;
+}
+
+.time-readout {
+    font-variant-numeric: tabular-nums;
+    min-width: 9.5rem;
+}
+
+.scrubber {
+    flex: 1;
+    min-width: 8rem;
+    accent-color: var(--accent);
+}
+
+.data-notice {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.site-footer {
+    max-width: 80rem;
+    margin: 2rem auto 0;
+    padding: 1rem 0;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* Blazor template: error UI and boot progress */
 
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;
+    color: #1c1f24;
     bottom: 0;
     box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
     box-sizing: border-box;
@@ -32,8 +226,8 @@
     }
 
 .blazor-error-boundary {
-    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
-    padding: 1rem 1rem 1rem 3.7rem;
+    background: #b32121;
+    padding: 1rem;
     color: white;
 }
 
@@ -79,18 +273,13 @@ code {
     color: #c02d76;
 }
 
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-    color: var(--bs-secondary-color);
-    text-align: end;
-}
+@media (max-width: 40rem) {
+    .playback-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
 
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-    text-align: start;
-}
-.site-footer {
-    margin-top: 2rem;
-    padding: 1rem 0;
-    border-top: 1px solid #ddd;
-    font-size: 0.85rem;
-    color: #555;
+    .scrubber {
+        width: 100%;
+    }
 }

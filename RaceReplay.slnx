@@ -23,5 +23,6 @@
     <Project Path="tests/RaceReplay.Playback.Tests/RaceReplay.Playback.Tests.csproj" />
     <Project Path="tests/RaceReplay.Synthetic.Tests/RaceReplay.Synthetic.Tests.csproj" />
     <Project Path="tests/RaceReplay.TestKit/RaceReplay.TestKit.csproj" />
+    <Project Path="tests/RaceReplay.Web.Tests/RaceReplay.Web.Tests.csproj" />
   </Folder>
 </Solution>

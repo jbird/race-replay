@@ -1,6 +1,7 @@
 using System.Text;
 
 using RaceReplay.Bundle.Catalog;
+using RaceReplay.TestKit;
 
 namespace RaceReplay.Bundle.Tests;
 

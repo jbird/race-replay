@@ -18,7 +18,20 @@ dotnet build
 dotnet test
 ```
 
-Run the web app with hot reload:
+## Run the web app with demo races
+
+The app plays bundles from `src/RaceReplay.Web/wwwroot/bundles/`, which is gitignored. Build a demo race or two
+with the CLI, then a catalogue listing them:
+
+```bash
+dotnet run --project src/RaceReplay.Cli -- build --source synthetic --seed 1 --out src/RaceReplay.Web/wwwroot/bundles/demo
+```
+
+```bash
+dotnet run --project src/RaceReplay.Cli -- catalog --bundles src/RaceReplay.Web/wwwroot/bundles
+```
+
+Then run the app with hot reload and open the address it prints:
 
 ```bash
 dotnet watch --project src/RaceReplay.Web

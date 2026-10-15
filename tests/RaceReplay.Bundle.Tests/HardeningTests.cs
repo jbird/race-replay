@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 
 using RaceReplay.Bundle.Manifest;
+using RaceReplay.TestKit;
 
 namespace RaceReplay.Bundle.Tests;
 

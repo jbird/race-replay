@@ -4,13 +4,13 @@
 
   // Gated: must appear in the merged report at or above the minimum.
   "assemblies": [
-    "RaceReplay.Domain"
+    "RaceReplay.Domain",
+    "RaceReplay.Bundle"
   ],
 
   // No code yet, so absent from reports. The gate fails once one gains code, until it moves up.
   "pending": [
     "RaceReplay.Analysis",
-    "RaceReplay.Bundle",
     "RaceReplay.Playback",
     "OpenF1.Client"
   ]

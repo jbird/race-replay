@@ -49,8 +49,6 @@ builder.Services
     .AddSingleton<ReplayCatalog>()                 // reads bundles/catalog.json
     .AddSingleton<HttpReplaySource>()              // IReplaySource: demo and hosted bundles
     .AddSingleton<LocalPackageReplaySource>()      // IReplaySource: the .rrz the user opened
-    .AddSingleton<ReplayBundleReader>()
-    .AddSingleton<ReplayPackageReader>()
     .AddSingleton<ReplayStore>()                   // view state; concrete (ADR-0009)
     .AddSingleton<ReplaySessionHost>()             // owns the per-replay object graph (clock, sampler, renderers)
     .AddSingleton<ITrackMapRenderer, CanvasTrackMapRenderer>()   // JS boundary: interface kept

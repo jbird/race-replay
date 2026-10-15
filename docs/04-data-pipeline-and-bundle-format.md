@@ -439,25 +439,25 @@ Over the wire, gzip should roughly halve this. Delta-encoding integer channels (
 ### 7.5 Reading a bundle
 
 ```csharp
-public sealed class ReplayPackageReader(ReplayBundleReader bundles)
+public static class ReplayPackageReader
 {
     // .rrz: open from an in-memory stream (browser) and hand the entries to the bundle reader.
-    public ReplaySession ReadPackage(Stream package)
+    public static ReplaySession ReadPackage(Stream package)
     {
         using var zip = new ZipArchive(package, ZipArchiveMode.Read);
         PackageEntries entries = PackageEntries.FromArchive(zip);     // allow-listed names, size caps
-        return bundles.Read(entries.Manifest, entries.Positions, entries.Gaps);
+        return ReplayBundleReader.Read(entries.Manifest, entries.Positions /*, entries.Gaps */);
     }
 }
 
-public sealed class ReplayBundleReader
+// Stateless, so a static class rather than a DI service.
+public static class ReplayBundleReader
 {
-    public ReplaySession Read(BundleManifestDto manifest, ReadOnlyMemory<byte> positions, ReadOnlyMemory<byte> gaps)
+    public static ReplaySession Read(ReadOnlySpan<byte> manifestJson, ReadOnlySpan<byte> positions)
     {
-        var header = RrbHeader.Parse(positions.Span);         // validates magic, version, bounds
-        // …directory lookup per driver/channel, then:
-        ReadOnlySpan<short> xq = MemoryMarshal.Cast<byte, short>(positions.Span.Slice(xEntry.Offset, xEntry.Length));
-        // Dequantise once into float[] owned by CarChannels (amortised at load; sampling stays branch-light).
+        RrbHeader header = RrbHeader.Parse(positions, RrbKind.Positions);  // validates magic, version, bounds
+        // …directory lookup per driver/channel, bounds-checked, then dequantise each block once into a float[]
+        // owned by CarChannels (amortised at load; sampling stays branch-light).
     }
 }
 ```

@@ -144,4 +144,5 @@ public sealed record ManifestProvenanceDto
     RespectNullableAnnotations = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(BundleManifestDto))]
+[JsonSerializable(typeof(RaceReplay.Bundle.Catalog.BundleCatalogDto))]
 internal sealed partial class BundleJsonContext : JsonSerializerContext;

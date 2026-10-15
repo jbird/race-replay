@@ -1,0 +1,65 @@
+@page "/"
+@using RaceReplay.Bundle.Catalog
+@inject SiteCatalog Catalog
+
+<PageTitle>Race Replay</PageTitle>
+
+<h1>Race Replay</h1>
+
+<p class="lede">
+    Watch a race unfold on an animated track map: play, pause, change speed and scrub to any moment.
+</p>
+
+<section aria-labelledby="demo-races">
+    <h2 id="demo-races">Demo races</h2>
+
+    @if (_error is not null)
+    {
+        <div class="notice notice-error" role="alert">
+            <p>Couldn't load the list of races. @_error.Message</p>
+            <button type="button" @onclick="LoadAsync">Retry</button>
+        </div>
+    }
+    else if (_demos is null)
+    {
+        <p role="status">Loading the list of races…</p>
+    }
+    else if (_demos.Count == 0)
+    {
+        <p>
+            No demo races are built yet. To build some locally, see
+            <a href="https://github.com/jbird/race-replay/blob/main/CONTRIBUTING.md#run-the-web-app-with-demo-races">Run the web app with demo races</a>.
+        </p>
+    }
+    else
+    {
+        <ul class="race-list">
+            @foreach (CatalogSessionDto demo in _demos)
+            {
+                <li><a href="@($"replay/demo/{demo.Seed}")">@demo.Title</a></li>
+            }
+        </ul>
+        <p class="hint">Demo races are generated: the circuit, drivers and teams are fictional.</p>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<CatalogSessionDto>? _demos;
+    private ReplayLoadException? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        (_demos, _error) = (null, null);
+        try
+        {
+            BundleCatalogDto catalog = await Catalog.GetAsync(CancellationToken.None);
+            _demos = [.. catalog.Sessions.Where(s => s.Seed is not null).OrderBy(s => s.Seed)];
+        }
+        catch (ReplayLoadException e)
+        {
+            _error = e;
+        }
+    }
+}

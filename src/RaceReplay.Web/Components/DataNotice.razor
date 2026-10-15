@@ -1,0 +1,17 @@
+@* Where the data comes from: a fictional demo, or the OpenF1 attribution and licence (docs/05 §9.3, NFR-12). *@
+
+<p class="data-notice">
+    @if (Provenance.IsSynthetic)
+    {
+        <text>Synthetic demo — fictional data</text>
+    }
+    else
+    {
+        @($"{Provenance.Attribution} · Licence: {Provenance.Licence}")
+    }
+</p>
+
+@code {
+    [Parameter, EditorRequired]
+    public required Provenance Provenance { get; set; }
+}

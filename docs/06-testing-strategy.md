@@ -113,9 +113,9 @@ flowchart TB
 | `RaceReplay.Ingest.OpenF1.Tests` | DTO → domain mapping, provider contract on recorded fixtures | 3 % |
 | `RaceReplay.Playback.Tests` | Clock, sampler (including zero-allocation), running order, tower and chart projection | 15 % |
 | `RaceReplay.Cli.Tests` | Command handlers with substitute stores and report writers; option validation; exit codes | 5 % |
-| `RaceReplay.Web.Tests` (M5) | Components with the real `ReplayStore` and fake renderers; opening packages | 5 % |
+| `RaceReplay.Web.Tests` | From M1: `HttpReplaySource` against a fake handler, render loop (including zero-allocation), UI throttle, session host lifetime. From M5: components with the real `ReplayStore` and fake renderers; opening packages | 5 % |
 | `RaceReplay.Architecture.Tests` | Project dependency rules, banned APIs | — |
-| `RaceReplay.TestKit` (library) | Contract base classes, recorded-fixture loader, assertion helpers. References `xunit.v3.extensibility.core` and `xunit.v3.assert` so the abstract contract classes can carry `[Fact]`s. Synthetic builders live in the production `RaceReplay.Synthetic` library and are reused here. | — |
+| `RaceReplay.TestKit` (library) | Contract base classes, small hand-built `TestReplays`, recorded-fixture loader, assertion helpers. References `xunit.v3.extensibility.core` and `xunit.v3.assert` so the abstract contract classes can carry `[Fact]`s. Synthetic builders live in the production `RaceReplay.Synthetic` library and are reused here. | — |
 
 ## 4. Conventions
 

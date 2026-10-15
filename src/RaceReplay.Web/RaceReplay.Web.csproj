@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
   <PropertyGroup>
+    <!-- Required by the [JSImport]/[JSExport] source generator. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>

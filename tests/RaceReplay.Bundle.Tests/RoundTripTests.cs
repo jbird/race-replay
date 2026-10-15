@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 
 using RaceReplay.Domain;
+using RaceReplay.TestKit;
 
 namespace RaceReplay.Bundle.Tests;
 

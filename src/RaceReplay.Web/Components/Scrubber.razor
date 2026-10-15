@@ -1,0 +1,57 @@
+@* The timeline (FR-04). Dragging pauses movement and the cars follow the thumb on every input event; releasing
+   resumes if the replay was playing (docs/05 §3.3, NFR-02). Keyboard input seeks directly. *@
+@implements IDisposable
+@inject ReplaySessionHost Host
+@inject ReplayStore Store
+
+<input type="range" class="scrubber" aria-label="Replay position"
+       min="0" max="@Invariant(State.Duration)" step="1"
+       value="@Invariant(State.Position)"
+       aria-valuetext="@TimeFormat.Spoken(State.Position)"
+       @onpointerdown="BeginScrub"
+       @oninput="Seek"
+       @onpointerup="EndScrub"
+       @onpointercancel="EndScrub"
+       @onchange="EndScrub" />
+
+@code {
+    private bool _scrubbing;
+
+    private ReplayViewState State => Store.State;
+
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void BeginScrub()
+    {
+        if (!_scrubbing)
+        {
+            _scrubbing = true;
+            Host.Control?.BeginScrub();
+        }
+    }
+
+    private void Seek(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double position)
+            && double.IsFinite(position))
+        {
+            Host.Control?.Seek(position);
+        }
+    }
+
+    // Pointer up, cancel and change can each end a drag; only the first counts.
+    private void EndScrub()
+    {
+        if (_scrubbing)
+        {
+            _scrubbing = false;
+            Host.Control?.EndScrub();
+        }
+    }
+
+    private static string Invariant(double value) => value.ToString(CultureInfo.InvariantCulture);
+
+    public void Dispose() => Store.Changed -= OnChanged;
+}

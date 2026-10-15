@@ -1,0 +1,14 @@
+@* Download progress while a replay loads (docs/05 §3.3). *@
+
+<div class="loading-overlay">
+    <label for="replay-progress">Loading replay… @Percent %</label>
+    <progress id="replay-progress" max="100" value="@Percent"></progress>
+</div>
+
+@code {
+    /// <summary>From 0 to 1.</summary>
+    [Parameter]
+    public double Progress { get; set; }
+
+    private int Percent => (int)Math.Round(Math.Clamp(Progress, 0, 1) * 100);
+}

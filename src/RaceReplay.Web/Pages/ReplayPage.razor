@@ -1,0 +1,130 @@
+@page "/replay/demo/{Seed:int}"
+@implements IDisposable
+@inject HttpReplaySource Source
+@inject ReplaySessionHost Host
+
+<PageTitle>@Heading · Race Replay</PageTitle>
+
+<div class="replay">
+    <header class="replay-header">
+        <h1>@Heading</h1>
+        <nav aria-label="Replay">
+            <a href="">Catalogue</a>
+        </nav>
+    </header>
+
+    @if (_error is not null)
+    {
+        <LoadError Error="_error" OnRetry="LoadAsync" />
+    }
+    else
+    {
+        <div class="replay-stage">
+            <TrackMap ElementId="@TrackMapId" />
+            @if (_replay is null)
+            {
+                <LoadingOverlay Progress="_progress" />
+            }
+        </div>
+
+        @if (_opened)
+        {
+            <div class="playback-bar">
+                <PlaybackControls />
+                <Scrubber />
+            </div>
+            <DataNotice Provenance="_replay!.Provenance" />
+        }
+    }
+</div>
+
+@code {
+    private const string TrackMapId = "track-map";
+
+    private CancellationTokenSource? _load;
+    private int? _seed;
+    private ReplaySession? _replay;
+    private bool _opened;
+    private double _progress;
+    private ReplayLoadException? _error;
+
+    [Parameter]
+    public int Seed { get; set; }
+
+    /// <summary>Start time in seconds (FR-11). Applied when the replay opens.</summary>
+    [SupplyParameterFromQuery(Name = "t")]
+    public string? Time { get; set; }
+
+    private string ReplayId => string.Create(CultureInfo.InvariantCulture, $"demo-{Seed}");
+
+    private string Heading => _replay is { } replay
+        ? $"{replay.Session.MeetingName} · {replay.Session.Name}"
+        : string.Create(CultureInfo.InvariantCulture, $"Demo race {Seed}");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // A query-only change keeps the open replay; live ?t= sync arrives with RR-063.
+        if (_seed != Seed)
+        {
+            _seed = Seed;
+            await LoadAsync();
+        }
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // The track map's host element exists only after the first render with the replay loaded.
+        if (_replay is not null && !_opened)
+        {
+            Host.Open(_replay, TrackMapId, DeepLink.ParseTime(Time));
+            _opened = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        CancelLoad();
+        CancellationTokenSource load = _load = new CancellationTokenSource();
+        Host.Close();
+        (_replay, _opened, _progress, _error) = (null, false, 0, null);
+
+        try
+        {
+            Progress<double> progress = new(p =>
+            {
+                if (!load.IsCancellationRequested)
+                {
+                    _progress = Math.Max(_progress, p);
+                    StateHasChanged();
+                }
+            });
+            ReplaySession replay = await Source.LoadAsync(ReplayId, progress, load.Token);
+            if (!load.IsCancellationRequested)
+            {
+                _replay = replay;
+            }
+        }
+        catch (ReplayLoadException e) when (!load.IsCancellationRequested)
+        {
+            _error = e;
+        }
+        catch (OperationCanceledException) when (load.IsCancellationRequested)
+        {
+            // Superseded by a newer load, or the page closed.
+        }
+    }
+
+    private void CancelLoad()
+    {
+        _load?.Cancel();
+        _load?.Dispose();
+        _load = null;
+    }
+
+    public void Dispose()
+    {
+        CancelLoad();
+        Host.Close();
+    }
+}

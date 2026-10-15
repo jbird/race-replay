@@ -1,9 +1,9 @@
 using RaceReplay.Domain;
 
-namespace RaceReplay.Bundle.Tests;
+namespace RaceReplay.TestKit;
 
 /// <summary>Small hand-built replays: cars circling a circular track, with known gaps in their data.</summary>
-internal static class TestReplays
+public static class TestReplays
 {
     public const double RateHz = 4;
     public const float CentreX = 1_234.5f;

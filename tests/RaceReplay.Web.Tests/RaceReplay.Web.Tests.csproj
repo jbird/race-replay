@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for the app's plain .NET parts from M1; bUnit component tests join in M5 (06 §3, §10). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RaceReplay.Web\RaceReplay.Web.csproj" />
+    <ProjectReference Include="..\RaceReplay.TestKit\RaceReplay.TestKit.csproj" />
+  </ItemGroup>
+</Project>

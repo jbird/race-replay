@@ -68,6 +68,82 @@ public sealed class ReplaySessionTests
         Assert.Same(gaps, replay.Gaps);
     }
 
+    [Theory]
+    [InlineData(1)] // too short: the timeline (1 s) needs 2 samples at 1 Hz
+    [InlineData(3)] // too long
+    public void Constructor_GapSeriesNotSpanningTheTimeline_Throws(int samples)
+    {
+        GapSeries gaps = new(1, new Dictionary<DriverNumber, ReadOnlyMemory<float>> { [new DriverNumber(1)] = new float[samples] });
+
+        Assert.Throws<ArgumentException>(() => Build(gaps: gaps));
+    }
+
+    [Fact]
+    public void Constructor_GapSeriesForADriverNotInTheSession_Throws()
+    {
+        GapSeries gaps = new(1, new Dictionary<DriverNumber, ReadOnlyMemory<float>>
+        {
+            [new DriverNumber(1)] = new float[2],
+            [new DriverNumber(4)] = new float[2],
+            [new DriverNumber(7)] = new float[2],
+        });
+
+        Assert.Throws<ArgumentException>(() => Build(drivers: [Driver(1), Driver(4)], cars: [Car(1), Car(4)], gaps: gaps));
+    }
+
+    [Fact]
+    public void Constructor_SyntheticProvenanceSeedDiffersFromKey_Throws() =>
+        Assert.Throws<ArgumentException>(
+            () => Build(key: SessionKey.Synthetic(1), provenance: Provenance.ForSynthetic(7, s_t0, "b")));
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(-0.25)]
+    [InlineData(1.25)] // the timeline spans 0–1 s
+    [InlineData(double.PositiveInfinity)]
+    public void Constructor_EventOffTheTimeline_Throws(double time) =>
+        Assert.Throws<ArgumentException>(() => Build(events: [new ChequeredFlagEvent(time)]));
+
+    [Fact]
+    public void Constructor_TrackStatusEndingAfterTheTimeline_Throws() =>
+        Assert.Throws<ArgumentException>(
+            () => Build(events: [new TrackStatusEvent(0.5, 1.5, TrackStatus.SafetyCar)]));
+
+    [Fact]
+    public void Constructor_EventsAtTheTimelineEdges_AreAccepted()
+    {
+        RaceEvent[] events = [new ChequeredFlagEvent(0), new TrackStatusEvent(0.5, 1, TrackStatus.RedFlag), new ChequeredFlagEvent(1)];
+
+        ReplaySession replay = Build(events: events);
+
+        Assert.Equal(events, replay.Events);
+    }
+
+    [Fact]
+    public void Constructor_NullDriver_ThrowsArgumentException() =>
+        Assert.Throws<ArgumentException>(() => Build(drivers: [null!], cars: [Car(1)]));
+
+    [Fact]
+    public void Constructor_NullCar_ThrowsArgumentException() =>
+        Assert.Throws<ArgumentException>(() => Build(drivers: [Driver(1)], cars: [null!]));
+
+    [Fact]
+    public void Constructor_NullEvent_ThrowsArgumentException() =>
+        Assert.Throws<ArgumentException>(() => Build(events: [null!]));
+
+    [Fact]
+    public void Constructor_EventListIndexerAndEnumeratorDisagree_KeepsOnlyWhatItValidated()
+    {
+        RaceEvent[] ordered = [new ChequeredFlagEvent(0.25), new ChequeredFlagEvent(0.75)];
+        RaceEvent[] unordered = [new ChequeredFlagEvent(0.75), new ChequeredFlagEvent(0.25)];
+        InconsistentList<RaceEvent> events = new(ordered, unordered);
+
+        ReplaySession? replay = null;
+        Exception? error = Record.Exception(() => replay = Build(events: events));
+
+        Assert.True(error is ArgumentException || replay!.Events.SequenceEqual(ordered));
+    }
+
     [Fact]
     public void Constructor_EventsOutOfOrder_Throws() =>
         Assert.Throws<ArgumentException>(() => Build(events: [new ChequeredFlagEvent(1), new ChequeredFlagEvent(0.5)]));

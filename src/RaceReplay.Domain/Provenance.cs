@@ -26,6 +26,11 @@ public sealed record Provenance
         int? seed = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(builder);
+        if (retrievedUtc.Offset != TimeSpan.Zero)
+        {
+            throw new ArgumentException("The retrieval time must be a UTC timestamp.", nameof(retrievedUtc));
+        }
+
         switch (source)
         {
             case DataSource.Synthetic when seed is null:
@@ -50,7 +55,7 @@ public sealed record Provenance
 
     public DataSource Source { get; }
 
-    /// <summary>When the data was fetched or generated.</summary>
+    /// <summary>When the data was fetched or generated (UTC).</summary>
     public DateTimeOffset RetrievedUtc { get; }
 
     /// <summary>The tool and version that built the replay, e.g. <c>race-replay 0.1.0+3f2c1ab</c>.</summary>

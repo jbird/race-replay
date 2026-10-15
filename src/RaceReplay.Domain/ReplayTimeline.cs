@@ -34,8 +34,10 @@ public sealed class ReplayTimeline
             throw new ArgumentOutOfRangeException(nameof(raceStart), raceStart, $"The race start must lie within [0, {duration}].");
         }
 
+        // Copy first, then validate the copy: what is checked is exactly what is kept.
+        TimelineSegment[] owned = [.. segments];
         double previousEnd = 0;
-        foreach (TimelineSegment segment in segments)
+        foreach (TimelineSegment segment in owned)
         {
             if (!double.IsFinite(segment.Start) || !double.IsFinite(segment.End)
                 || segment.Start < previousEnd || segment.End < segment.Start || segment.End > duration)
@@ -52,7 +54,7 @@ public sealed class ReplayTimeline
         SampleCount = sampleCount;
         RaceStart = raceStart;
         Duration = duration;
-        Segments = Array.AsReadOnly(segments.ToArray());
+        Segments = Array.AsReadOnly(owned);
     }
 
     public DateTimeOffset T0Utc { get; }
@@ -77,6 +79,25 @@ public sealed class ReplayTimeline
         return index / SampleRateHz;
     }
 
-    /// <summary>The fractional sample index at <paramref name="time"/>, clamped to the grid.</summary>
-    public double SampleIndexAt(double time) => Math.Clamp(time * SampleRateHz, 0, SampleCount - 1);
+    /// <summary>
+    /// The fractional sample index at <paramref name="time"/>, clamped to the grid. NaN maps to 0 rather than
+    /// passing through, because callers cast the result to an array index.
+    /// </summary>
+    public double SampleIndexAt(double time) =>
+        double.IsNaN(time) ? 0 : Math.Clamp(time * SampleRateHz, 0, SampleCount - 1);
+
+    /// <summary>
+    /// How many samples a series at <paramref name="rateHz"/> needs to span this timeline from T0:
+    /// ⌊Duration × rate⌋ + 1 (docs/03 §8.1). Builders and readers both use this, so they agree on gap lengths.
+    /// </summary>
+    public int SampleCountAtRate(double rateHz)
+    {
+        if (!double.IsFinite(rateHz) || rateHz <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rateHz), rateHz, "The sample rate must be positive.");
+        }
+
+        // The epsilon absorbs representation error, e.g. a 1 Hz series over 7,199.999999… s still gets 7,201 samples.
+        return checked((int)Math.Floor((Duration * rateHz) + 1e-9) + 1);
+    }
 }

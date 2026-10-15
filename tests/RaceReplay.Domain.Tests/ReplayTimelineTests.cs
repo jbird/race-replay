@@ -35,6 +35,48 @@ public sealed class ReplayTimelineTests
     public void SampleIndexAt_Time_IsFractionalAndClamped(double time, double expected) =>
         Assert.Equal(expected, new ReplayTimeline(s_t0, 4, 401, 0, []).SampleIndexAt(time), 1e-12);
 
+    [Theory]
+    [InlineData(double.NaN)]
+    public void SampleIndexAt_NaN_IsTheFirstSample(double time) =>
+        Assert.Equal(0, new ReplayTimeline(s_t0, 4, 401, 0, []).SampleIndexAt(time));
+
+    [Theory]
+    [InlineData(401, 1, 101)]       // 100 s at 1 Hz: 0, 1, …, 100
+    [InlineData(401, 4, 401)]       // the timeline's own rate
+    [InlineData(400, 1, 100)]       // 99.75 s: the last whole second is 99
+    [InlineData(28_797, 1, 7_200)]  // 7,199 s
+    public void SampleCountAtRate_Rate_CoversTheTimelineFromT0(int timelineSamples, double rate, int expected) =>
+        Assert.Equal(expected, new ReplayTimeline(s_t0, 4, timelineSamples, 0, []).SampleCountAtRate(rate));
+
+    [Fact]
+    public void SampleCountAtRate_RepresentationErrorJustBelowAWholeSample_StillCountsIt()
+    {
+        // 50 samples at 3 Hz span 49/3 s; × 15 is exactly 245 but evaluates to 244.99999999999997.
+        ReplayTimeline timeline = new(s_t0, 3, 50, 0, []);
+
+        Assert.Equal(246, timeline.SampleCountAtRate(15));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    public void SampleCountAtRate_RateNotPositive_Throws(double rate) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ReplayTimeline(s_t0, 4, 401, 0, []).SampleCountAtRate(rate));
+
+    [Fact]
+    public void Constructor_SegmentListChangesBetweenEnumerations_KeepsWhatItValidated()
+    {
+        TimelineSegment[] valid = [new(0, 50, SegmentKind.Racing), new(50, 100, SegmentKind.PostRace)];
+        TimelineSegment[] overlapping = [new(0, 60, SegmentKind.Racing), new(50, 100, SegmentKind.PostRace)];
+        InconsistentList<TimelineSegment> segments = new(valid, valid, overlapping);
+
+        ReplayTimeline? timeline = null;
+        Exception? error = Record.Exception(() => timeline = new ReplayTimeline(s_t0, 4, 401, 0, segments));
+
+        Assert.True(error is ArgumentException || timeline!.Segments.SequenceEqual(valid));
+    }
+
     [Fact]
     public void Constructor_OrderedSegments_KeepsThem()
     {

@@ -3,15 +3,16 @@ namespace RaceReplay.Domain;
 /// <summary>
 /// One car's channels on the timeline grid (docs/03 §7.2). Where <see cref="Valid"/> is false the values carry no
 /// meaning, so readers must check it. <see cref="Progress"/> is empty until race progress is derived (M2).
+/// The channels are copied, so the replay can't change if a caller reuses or pools its buffers.
 /// </summary>
 public sealed class CarChannels
 {
     public CarChannels(
         DriverNumber driver,
-        ReadOnlyMemory<float> x,
-        ReadOnlyMemory<float> y,
+        ReadOnlySpan<float> x,
+        ReadOnlySpan<float> y,
         ValidityMask valid,
-        ReadOnlyMemory<float> progress = default)
+        ReadOnlySpan<float> progress = default)
     {
         ArgumentNullException.ThrowIfNull(valid);
         if (x.Length != valid.Count || y.Length != valid.Count)
@@ -28,10 +29,10 @@ public sealed class CarChannels
         }
 
         Driver = driver;
-        X = x;
-        Y = y;
+        X = x.ToArray();
+        Y = y.ToArray();
         Valid = valid;
-        Progress = progress;
+        Progress = progress.ToArray();
     }
 
     public DriverNumber Driver { get; }

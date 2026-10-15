@@ -37,6 +37,37 @@ public sealed class CarChannelsTests
     public void Constructor_LengthMismatch_Throws(int xLength, int yLength, int progressLength) =>
         Assert.Throws<ArgumentException>(() => new CarChannels(
             s_driver, new float[xLength], new float[yLength], ValidityMask.FromBools([true, true, true]), new float[progressLength]));
+
+    [Fact]
+    public void Constructor_SourceBuffersReusedAfterwards_ChannelsAreUnaffected()
+    {
+        float[] x = [1, 2, 3];
+        float[] y = [4, 5, 6];
+        float[] progress = [0, 5, 10];
+        CarChannels car = new(s_driver, x, y, ValidityMask.FromBools([true, true, true]), progress);
+
+        x[0] = y[0] = progress[0] = 99;
+
+        Assert.Equal(1, car.X.Span[0]);
+        Assert.Equal(4, car.Y.Span[0]);
+        Assert.Equal(0, car.Progress.Span[0]);
+    }
+}
+
+public sealed class ValidityMaskOwnershipTests
+{
+    [Fact]
+    public void Constructor_SourceBytesChangedAfterwards_MaskIsUnaffected()
+    {
+        byte[] bits = [0b0000_0001];
+        ValidityMask mask = new(bits, 3);
+
+        bits[0] = 0b0000_0110;
+
+        Assert.True(mask[0]);
+        Assert.False(mask[1]);
+        Assert.Equal(1, mask.CountValid());
+    }
 }
 
 public sealed class GapSeriesTests
@@ -88,6 +119,19 @@ public sealed class GapSeriesTests
     {
         Assert.True(GapSeries.Empty.IsEmpty);
         Assert.Equal(0, GapSeries.Empty.SampleCount);
+        Assert.Equal(0, GapSeries.Empty.DriverCount);
+    }
+
+    [Fact]
+    public void Constructor_SourceArraysChangedAfterwards_SeriesAreUnaffected()
+    {
+        float[] gap = [0, 1, 2];
+        GapSeries series = new(1, new Dictionary<DriverNumber, ReadOnlyMemory<float>> { [new DriverNumber(4)] = gap });
+
+        gap[1] = 99;
+
+        Assert.Equal(1, series.GapFor(new DriverNumber(4)).Span[1]);
+        Assert.Equal(1, series.DriverCount);
     }
 }
 
@@ -143,4 +187,9 @@ public sealed class ProvenanceTests
     [Fact]
     public void Constructor_NoBuilder_Throws() =>
         Assert.Throws<ArgumentException>(() => Provenance.ForSynthetic(1, s_when, " "));
+
+    [Fact]
+    public void Constructor_NonUtcRetrievalTime_Throws() =>
+        Assert.Throws<ArgumentException>(
+            () => Provenance.ForOpenF1(new DateTimeOffset(2026, 10, 15, 11, 0, 0, TimeSpan.FromHours(2)), "b"));
 }

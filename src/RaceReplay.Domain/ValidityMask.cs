@@ -8,19 +8,19 @@ namespace RaceReplay.Domain;
 /// </summary>
 public sealed class ValidityMask
 {
-    private readonly ReadOnlyMemory<byte> _bits;
+    private readonly byte[] _bits;
 
+    /// <summary>Copies <paramref name="bits"/>, so later changes to the source don't affect the mask.</summary>
     /// <param name="bits">The bitmap; exactly <see cref="ByteLength"/>(<paramref name="count"/>) bytes.</param>
     /// <param name="count">Number of samples.</param>
-    public ValidityMask(ReadOnlyMemory<byte> bits, int count)
+    public ValidityMask(ReadOnlySpan<byte> bits, int count)
+        : this(count, Validate(bits, count).ToArray())
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(count);
-        if (bits.Length != ByteLength(count))
-        {
-            throw new ArgumentException(
-                $"A mask of {count} samples needs {ByteLength(count)} bytes, not {bits.Length}.", nameof(bits));
-        }
+    }
 
+    // Takes ownership of a freshly built array that no caller holds.
+    private ValidityMask(int count, byte[] bits)
+    {
         _bits = bits;
         Count = count;
     }
@@ -37,7 +37,7 @@ public sealed class ValidityMask
         {
             ArgumentOutOfRangeException.ThrowIfNegative(index);
             ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Count);
-            return (_bits.Span[index >> 3] & (1 << (index & 7))) != 0;
+            return (_bits[index >> 3] & (1 << (index & 7))) != 0;
         }
     }
 
@@ -55,26 +55,37 @@ public sealed class ValidityMask
             }
         }
 
-        return new ValidityMask(bits, values.Length);
+        return new ValidityMask(values.Length, bits);
     }
 
     /// <summary>Number of valid samples, ignoring padding bits.</summary>
     public int CountValid()
     {
-        ReadOnlySpan<byte> bits = _bits.Span;
         int fullBytes = Count >> 3;
         int valid = 0;
         for (int i = 0; i < fullBytes; i++)
         {
-            valid += BitOperations.PopCount(bits[i]);
+            valid += BitOperations.PopCount(_bits[i]);
         }
 
         int remainder = Count & 7;
         if (remainder > 0)
         {
-            valid += BitOperations.PopCount((uint)(bits[fullBytes] & ((1 << remainder) - 1)));
+            valid += BitOperations.PopCount((uint)(_bits[fullBytes] & ((1 << remainder) - 1)));
         }
 
         return valid;
+    }
+
+    private static ReadOnlySpan<byte> Validate(ReadOnlySpan<byte> bits, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        if (bits.Length != ByteLength(count))
+        {
+            throw new ArgumentException(
+                $"A mask of {count} samples needs {ByteLength(count)} bytes, not {bits.Length}.", nameof(bits));
+        }
+
+        return bits;
     }
 }

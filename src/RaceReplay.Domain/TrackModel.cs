@@ -3,6 +3,7 @@ namespace RaceReplay.Domain;
 /// <summary>
 /// The circuit as a closed centreline. Arc length <c>s</c> runs from 0 at the start/finish line (point 0) to
 /// <see cref="LapLength"/>, in the direction of travel; the last point joins back to the first (docs/03 §5).
+/// The centreline is copied, so the cached arc lengths can't drift from the points.
 /// </summary>
 public sealed class TrackModel
 {
@@ -17,7 +18,8 @@ public sealed class TrackModel
         double unitsPerMetre = DefaultUnitsPerMetre,
         float displayRotationDegrees = 0)
     {
-        ReadOnlySpan<TrackPoint> points = centreline.Span;
+        TrackPoint[] owned = centreline.ToArray();
+        ReadOnlySpan<TrackPoint> points = owned;
         if (points.Length < 3)
         {
             throw new ArgumentException("A centreline needs at least three points.", nameof(centreline));
@@ -51,7 +53,7 @@ public sealed class TrackModel
             throw new ArgumentException("The centreline has zero length.", nameof(centreline));
         }
 
-        Centreline = centreline;
+        Centreline = owned;
         LapLength = _cumulative[^1];
         Bounds = TrackBounds.Of(points);
         UnitsPerMetre = unitsPerMetre;

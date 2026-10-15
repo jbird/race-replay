@@ -39,6 +39,19 @@ public sealed class TrackModelTests
     }
 
     [Fact]
+    public void Constructor_SourceArrayChangedAfterwards_ModelIsUnaffected()
+    {
+        TrackPoint[] points = [.. s_square];
+        TrackModel track = new(points);
+
+        points[1] = new TrackPoint(1000, 0);
+
+        Assert.Equal(new TrackPoint(100, 0), track.Centreline.Span[1]);
+        Assert.Equal(400, track.LapLength, 1e-9);
+        Assert.Equal(50, track.PointAt(50).X, Tolerance);
+    }
+
+    [Fact]
     public void PointAt_TinyNegativeArcLength_StaysOnTheTrack()
     {
         TrackModel track = new(s_square);

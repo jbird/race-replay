@@ -4,7 +4,7 @@ namespace RaceReplay.Domain;
 
 /// <summary>
 /// Each car's gap to the virtual leader in seconds, sampled at <see cref="SampleRateHz"/> from T0 (docs/03 §8.1).
-/// <c>NaN</c> marks samples where the gap is undefined.
+/// <c>NaN</c> marks samples where the gap is undefined. The series are copied, so callers can't change them later.
 /// </summary>
 public sealed class GapSeries
 {
@@ -19,8 +19,12 @@ public sealed class GapSeries
 
         ArgumentNullException.ThrowIfNull(gaps);
 
+        // Copy first, then validate the copy: what is checked is exactly what is kept.
+        FrozenDictionary<DriverNumber, ReadOnlyMemory<float>> owned =
+            gaps.ToFrozenDictionary(pair => pair.Key, pair => (ReadOnlyMemory<float>)pair.Value.ToArray());
+
         int sampleCount = -1;
-        foreach ((DriverNumber driver, ReadOnlyMemory<float> series) in gaps)
+        foreach ((DriverNumber driver, ReadOnlyMemory<float> series) in owned)
         {
             if (sampleCount >= 0 && series.Length != sampleCount)
             {
@@ -33,7 +37,7 @@ public sealed class GapSeries
 
         SampleRateHz = sampleRateHz;
         SampleCount = Math.Max(sampleCount, 0);
-        _gaps = gaps.ToFrozenDictionary();
+        _gaps = owned;
     }
 
     /// <summary>No gaps: what a replay carries before gaps are derived (M2).</summary>
@@ -42,6 +46,9 @@ public sealed class GapSeries
     public double SampleRateHz { get; }
 
     public int SampleCount { get; }
+
+    /// <summary>Number of drivers with a series.</summary>
+    public int DriverCount => _gaps.Count;
 
     public bool IsEmpty => _gaps.Count == 0;
 

@@ -8,4 +8,8 @@
   <ItemGroup>
     <ProjectReference Include="..\RaceReplay.Domain\RaceReplay.Domain.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RaceReplay.Bundle.Tests" />
+  </ItemGroup>
 </Project>

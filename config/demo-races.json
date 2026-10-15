@@ -1,3 +1,7 @@
 {
-  "races": []
+  "races": [
+    { "seed": 1, "title": "Corrie Motor Circuit" },
+    { "seed": 3, "title": "Alder Park" },
+    { "seed": 7, "title": "Cinder Ring" }
+  ]
 }

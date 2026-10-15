@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Fingerprint the app's JS modules too, so a deploy is never served stale modules (docs/05 §2, spike S0). -->
+    <StaticWebAssetFingerprintPattern Include="JSModule" Pattern="*.js" Expression="#[.{fingerprint}]!" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\RaceReplay.Playback\RaceReplay.Playback.csproj" />
     <ProjectReference Include="..\RaceReplay.Bundle\RaceReplay.Bundle.csproj" />
   </ItemGroup>

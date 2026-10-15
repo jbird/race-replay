@@ -37,6 +37,21 @@ Then run the app with hot reload and open the address it prints:
 dotnet watch --project src/RaceReplay.Web
 ```
 
+## Measuring frame rate
+
+Add `?perf` to a replay's address, for example https://jbird.github.io/race-replay/replay/demo/1?perf. Press
+Play, choose 64× to load it fully, and wait 10 seconds. Every 10 seconds the console and a panel at the bottom
+right show:
+
+- frames per second, and frames over 20 ms;
+- the frame interval;
+- the time inside each frame, split into canvas drawing and .NET (the clock, sampling, interop and the 10 Hz
+  view-state renders).
+
+Measure a published Release build: the public site, or `dotnet publish src/RaceReplay.Web -c Release` with demo
+bundles copied into `wwwroot/bundles/`, served by any static server. Debug builds are slower. Without `?perf`,
+the loop makes no timing calls. [Spike S0](docs/spikes/S0.md) records the results.
+
 ## Before opening a pull request
 
 CI runs these on Linux, Windows and macOS; the gates run once, on Linux. Run them locally first:
@@ -73,7 +88,8 @@ attach the build report, not the package.
 ## Adding a synthetic demo race
 
 Demo races are generated from seeds listed in `config/demo-races.json`. Add an entry with a seed and a title,
-then check the race locally before opening a pull request.
+then check the race locally before opening a pull request. The title is a note for people: the catalogue takes
+its title from the bundle. A test checks that the seeds are unique and that their circuits have different names.
 
 ## Adding an event extractor
 

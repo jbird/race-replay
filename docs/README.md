@@ -21,6 +21,7 @@ Real-race data is not redistributed by default. Users build a real race locally 
 | 07 | [GitHub: repository, CI & delivery](07-repository-ci-and-delivery.md) | Shared template, settings as code, Actions workflows, Pages, Releases, supply chain, platform limits |
 | 08 | [Implementation plan](08-implementation-plan.md) | Bootstrap commands, spikes, milestones, contingency and cut line, backlog, definition of done |
 | — | [Architecture decision records](adr/README.md) | The key decisions, with context and consequences |
+| — | [Spike S0: interop and render loop](spikes/S0.md) | Frame times, download size and GitHub Pages behaviour, measured in M1 |
 
 ## One-paragraph summary
 

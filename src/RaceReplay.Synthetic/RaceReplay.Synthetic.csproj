@@ -3,4 +3,8 @@
     <ProjectReference Include="..\RaceReplay.Domain\RaceReplay.Domain.csproj" />
     <ProjectReference Include="..\RaceReplay.Application\RaceReplay.Application.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RaceReplay.Synthetic.Tests" />
+  </ItemGroup>
 </Project>

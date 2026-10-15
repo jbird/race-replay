@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test:
+    name: build-test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Restore (locked)
+        run: |
+          dotnet restore --locked-mode
+          dotnet tool restore
+
+      - name: Check formatting
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet format --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: >
+          dotnet test --no-build -c Release
+          --coverage --coverage-output-format cobertura
+          --report-xunit-trx
+          --results-directory TestResults
+
+      - name: Coverage report and gate
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          dotnet reportgenerator -reports:"TestResults/**/*.cobertura.xml" \
+            -targetdir:coverage -reporttypes:"Cobertura;MarkdownSummaryGithub"
+          cat coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          dotnet run scripts/check-coverage.cs -- coverage/Cobertura.xml
+
+      - name: Docs gate
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet run scripts/check-docs.cs -- .
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            TestResults/
+            coverage/
+          retention-days: 14
+
+  publish-site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Publish web app (trim analysis; warnings are errors)
+        run: dotnet publish src/RaceReplay.Web -c Release -o publish
+
+      - name: Assemble site (demo races, catalogue, data-policy check)
+        run: bash scripts/assemble-site.sh publish/wwwroot --base-path /
+
+      - name: Upload site preview
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-preview
+          path: publish/wwwroot
+          retention-days: 7

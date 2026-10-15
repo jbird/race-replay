@@ -1,0 +1,70 @@
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/*.md'
+      - 'docs/adr/**'
+      - 'docs/spikes/**'
+      - '*.md'
+  workflow_run:
+    workflows: ["Build bundles"]          # hosted mode only
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      HOSTED: ${{ vars.HOSTED_BUNDLES == 'true' }}
+      BASE_PATH: ${{ vars.SITE_BASE_PATH || format('/{0}/', github.event.repository.name) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Publish web app
+        run: dotnet publish src/RaceReplay.Web -c Release -o publish
+
+      - name: Check out hosted bundles (opt-in)
+        if: env.HOSTED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: data
+          path: data
+
+      - name: Assemble site
+        run: |
+          args=(--base-path "$BASE_PATH")
+          if [[ "$HOSTED" == "true" ]]; then args+=(--hosted data/bundles); fi
+          bash scripts/assemble-site.sh publish/wwwroot "${args[@]}"
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: publish/wwwroot
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

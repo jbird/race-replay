@@ -1,0 +1,36 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      testing:
+        patterns: ["xunit*", "Microsoft.Testing.*", "CsCheck", "bunit"]
+      microsoft:
+        patterns: ["Microsoft.*", "System.*"]
+    ignore:
+      # Stay on .NET 10 LTS until ADR-0001 is revisited.
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.Numerics.Tensors"
+        update-types: ["version-update:semver-major"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: dotnet-sdk          # keeps global.json on the latest .NET 10 patch
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

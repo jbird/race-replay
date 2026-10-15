@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RaceReplay.Ingest.OpenF1\RaceReplay.Ingest.OpenF1.csproj" />
+    <ProjectReference Include="..\RaceReplay.TestKit\RaceReplay.TestKit.csproj" />
+  </ItemGroup>
+</Project>

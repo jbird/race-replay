@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RaceReplay.Cli\RaceReplay.Cli.csproj" />
+    <ProjectReference Include="..\RaceReplay.TestKit\RaceReplay.TestKit.csproj" />
+  </ItemGroup>
+</Project>

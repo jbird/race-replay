@@ -1,0 +1,50 @@
+name: Bug
+description: Something in the app or the CLI doesn't work as expected.
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please don't attach real-race packages or raw OpenF1 responses (ADR-0008);
+        a build report or screenshot is enough.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - Web app
+        - CLI
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: URL (web app)
+      description: Include the `?t=` playback time if relevant.
+      placeholder: https://jbird.github.io/race-replay/replay/demo/...?t=1234
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS (web app)
+      placeholder: Firefox 140 on Windows 11
+  - type: input
+    id: cli-version
+    attributes:
+      label: CLI version and OS (CLI)
+      description: Output of `race-replay --version`.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations:
+      required: true

@@ -1,0 +1,16 @@
+{
+  // Line-coverage gate for scripts/check-coverage.cs (NFR-07, docs/06-testing-strategy.md §11).
+  "minimumLineCoverage": 85,
+
+  // Gated: must appear in the merged report at or above the minimum.
+  "assemblies": [],
+
+  // No code yet, so absent from reports. The gate fails once one gains code, until it moves up.
+  "pending": [
+    "RaceReplay.Domain",
+    "RaceReplay.Analysis",
+    "RaceReplay.Bundle",
+    "RaceReplay.Playback",
+    "OpenF1.Client"
+  ]
+}

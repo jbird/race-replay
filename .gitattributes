@@ -1,0 +1,20 @@
+# Normalise text to LF in the repository and working tree (Blazor integrity hashes,
+# golden files and shell scripts must not change between Windows and Linux checkouts).
+* text=auto eol=lf
+
+# Windows scripts (attribute patterns have no {a,b} braces, so one line per extension)
+*.[cC][mM][dD] text eol=crlf
+*.[bB][aA][tT] text eol=crlf
+*.[pP][sS]1    text eol=crlf
+
+*.json text eol=lf
+*.sh   text eol=lf
+
+# Binary formats
+*.png binary
+*.ico binary
+*.zip binary
+*.br  binary
+*.gz  binary
+*.rrb binary
+*.rrz binary

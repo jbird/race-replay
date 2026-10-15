@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- References every production project so each assembly can be inspected (06 §8). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RaceReplay.Domain\RaceReplay.Domain.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Analysis\RaceReplay.Analysis.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Application\RaceReplay.Application.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Bundle\RaceReplay.Bundle.csproj" />
+    <ProjectReference Include="..\..\src\OpenF1.Client\OpenF1.Client.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Ingest.OpenF1\RaceReplay.Ingest.OpenF1.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Synthetic\RaceReplay.Synthetic.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Playback\RaceReplay.Playback.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Cli\RaceReplay.Cli.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Web\RaceReplay.Web.csproj" />
+  </ItemGroup>
+</Project>

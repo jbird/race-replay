@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    Trimmable libraries and the WebAssembly app get implicit package references whose versions follow the
+    installed SDK's runtime patch (Microsoft.NET.ILLink.Tasks, the WebAssembly SDK packs). A lock file would pin
+    them, and setup-dotnet installs the newest .NET 10 SDK, so every .NET patch release would break CI's
+    locked-mode restore. These projects therefore restore without a lock file. Evaluated here,
+    after the project body, so IsTrimmable and the Blazor SDK are already known.
+  -->
+  <PropertyGroup Condition="'$(IsTrimmable)' == 'true' or '$(UsingMicrosoftNETSdkBlazorWebAssembly)' == 'true'">
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>race-replay</AssemblyName>
+    <RootNamespace>RaceReplay.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RaceReplay.Application\RaceReplay.Application.csproj" />
+    <ProjectReference Include="..\RaceReplay.Analysis\RaceReplay.Analysis.csproj" />
+    <ProjectReference Include="..\RaceReplay.Bundle\RaceReplay.Bundle.csproj" />
+    <ProjectReference Include="..\RaceReplay.Ingest.OpenF1\RaceReplay.Ingest.OpenF1.csproj" />
+    <ProjectReference Include="..\RaceReplay.Synthetic\RaceReplay.Synthetic.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+</Project>

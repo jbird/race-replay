@@ -1,0 +1,11 @@
+{
+  "name": "race-replay",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "dotnet restore && dotnet tool restore",
+  "customizations": {
+    "vscode": { "extensions": ["ms-dotnettools.csdevkit"] }
+  }
+}

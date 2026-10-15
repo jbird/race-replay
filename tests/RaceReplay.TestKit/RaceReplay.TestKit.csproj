@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Shared test library: contract base classes, fixture loader, assertion helpers (06 §3). Not a test project. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RaceReplay.Application\RaceReplay.Application.csproj" />
+    <ProjectReference Include="..\..\src\RaceReplay.Synthetic\RaceReplay.Synthetic.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.extensibility.core" />
+    <PackageReference Include="xunit.v3.assert" />
+  </ItemGroup>
+</Project>

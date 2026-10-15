@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and help
+    url: https://github.com/jbird/race-replay/discussions/categories/q-a
+    about: How do I build race X? CLI troubleshooting.
+  - name: Ideas
+    url: https://github.com/jbird/race-replay/discussions/categories/ideas
+    about: Open-ended ideas and feature discussion.
+  - name: Report a security vulnerability
+    url: https://github.com/jbird/race-replay/security/advisories/new
+    about: Please report vulnerabilities privately, not as issues.

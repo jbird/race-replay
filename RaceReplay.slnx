@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenF1.Client/OpenF1.Client.csproj" />
+    <Project Path="src/RaceReplay.Analysis/RaceReplay.Analysis.csproj" />
+    <Project Path="src/RaceReplay.Application/RaceReplay.Application.csproj" />
+    <Project Path="src/RaceReplay.Bundle/RaceReplay.Bundle.csproj" />
+    <Project Path="src/RaceReplay.Cli/RaceReplay.Cli.csproj" />
+    <Project Path="src/RaceReplay.Domain/RaceReplay.Domain.csproj" />
+    <Project Path="src/RaceReplay.Ingest.OpenF1/RaceReplay.Ingest.OpenF1.csproj" />
+    <Project Path="src/RaceReplay.Playback/RaceReplay.Playback.csproj" />
+    <Project Path="src/RaceReplay.Synthetic/RaceReplay.Synthetic.csproj" />
+    <Project Path="src/RaceReplay.Web/RaceReplay.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenF1.Client.Tests/OpenF1.Client.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Analysis.Tests/RaceReplay.Analysis.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Application.Tests/RaceReplay.Application.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Architecture.Tests/RaceReplay.Architecture.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Bundle.Tests/RaceReplay.Bundle.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Cli.Tests/RaceReplay.Cli.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Domain.Tests/RaceReplay.Domain.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Ingest.OpenF1.Tests/RaceReplay.Ingest.OpenF1.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Playback.Tests/RaceReplay.Playback.Tests.csproj" />
+    <Project Path="tests/RaceReplay.Synthetic.Tests/RaceReplay.Synthetic.Tests.csproj" />
+    <Project Path="tests/RaceReplay.TestKit/RaceReplay.TestKit.csproj" />
+  </Folder>
+</Solution>

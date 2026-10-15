@@ -1,0 +1,16 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Every project here is an xUnit v3 test executable, except shared libraries ending in .TestKit. -->
+  <PropertyGroup Condition="!$(MSBuildProjectName.EndsWith('.TestKit'))">
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

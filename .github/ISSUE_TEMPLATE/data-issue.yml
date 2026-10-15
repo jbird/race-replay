@@ -1,0 +1,40 @@
+name: Data issue
+description: A replay looks wrong — positions, gaps, running order or events.
+labels: ["type:bug", "area:analysis"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Attach the **build report** (`race-replay build ... --report report.md`), not the package.
+        Real-race data is never attached to issues (ADR-0008).
+  - type: input
+    id: session
+    attributes:
+      label: Session key or synthetic seed
+      placeholder: "9839, or synthetic seed 7"
+    validations:
+      required: true
+  - type: input
+    id: driver
+    attributes:
+      label: Driver(s)
+      placeholder: "#44, #16"
+  - type: input
+    id: time
+    attributes:
+      label: Replay time or lap
+      placeholder: "?t=2710, or lap 31"
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What looks wrong?
+      description: Compare with the official timing if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Build report
+      description: Paste or attach the Markdown build report.

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\OpenF1.Client\OpenF1.Client.csproj" />
+  </ItemGroup>
+</Project>

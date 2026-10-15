@@ -15,6 +15,8 @@ let view = null;
 let frame = new Float64Array(0); // the last frame drawn, kept to repaint after a resize
 let stride = 0;
 let dprQuery = null;
+let measurePaint = false; // ?perf: renderLoop.js separates canvas time from .NET time
+let paintMs = 0;
 const placed = [];      // label boxes placed this frame: [x, y, w, h] flattened
 let labelX = 0, labelY = 0;
 
@@ -36,6 +38,7 @@ export function init(hostId, centreline, rotationDegrees, acronyms, colours, out
   };
   frame = new Float64Array(0);
   stride = 0;
+  measurePaint = new URLSearchParams(location.search).has('perf');
   observer = new ResizeObserver(resize);
   observer.observe(host);
   watchDevicePixelRatio();
@@ -48,7 +51,20 @@ export function drawCars(frameView, frameStride) {
   if (frame.length !== frameView.length) frame = new Float64Array(frameView.length);
   frameView.copyTo(frame);
   stride = frameStride;
-  paint();
+  if (measurePaint) {
+    const begin = performance.now();
+    paint();
+    paintMs += performance.now() - begin;
+  } else {
+    paint();
+  }
+}
+
+// ?perf: canvas time spent drawing cars since the last call.
+export function takePaintMs() {
+  const ms = paintMs;
+  paintMs = 0;
+  return ms;
 }
 
 export function clear() {

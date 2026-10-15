@@ -1,5 +1,13 @@
-using System.CommandLine;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
-RootCommand root = new("Race Replay: build replay packages from OpenF1 sessions or seeded synthetic races.");
+using RaceReplay.Cli;
 
-return await root.Parse(args).InvokeAsync();
+// The host provides DI, configuration and logging; it isn't run, because each command is one unit of work.
+HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.Services.AddRaceReplayCli();
+using IHost host = builder.Build();
+
+return await CliCommands.RunAsync(host.Services, args);

@@ -45,8 +45,9 @@ if [[ -z "$hosted" ]]; then
   done < <(find "$site/bundles" -name manifest.json -print0)
 fi
 
-# 4. Catalogue (carries the site mode, so published app files are never edited) and schemas.
-#    The catalogue step arrives with the CLI's `catalog` command in M1 (RR-012); schemas in M4 (RR-052).
+# 4. Catalogue (carries the site mode, so published app files are never edited) and schemas (M4, RR-052).
+#    In demo mode the catalogue command also refuses real-race bundles: a second data-policy check.
+cli catalog --bundles "$site/bundles" --mode "$([[ -n "$hosted" ]] && echo hosted || echo demo)"
 if [[ -d docs/schema ]]; then cp -r docs/schema "$site/schema"; fi
 
 # 5. Compression: Pages can't negotiate pre-compressed files. Keep the Brotli copies for the

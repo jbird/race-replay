@@ -1,0 +1,25 @@
+@page "/spike/chart"
+@inject IJSRuntime JS
+
+@* S0 spike (throwaway, spike/s0-chart, not merged): uPlot with 20 × 7,200 points and a moving cursor. *@
+
+<PageTitle>S0 spike: uPlot chart</PageTitle>
+<HeadContent>
+    <link rel="stylesheet" href="lib/uplot/uPlot.min.css" />
+</HeadContent>
+
+<h1>S0 spike: uPlot, 20 × 7,200 points, moving cursor</h1>
+<p>Builds the chart, times a full redraw, then moves a cursor overlay every frame for 10 s. Keep the tab in front.</p>
+<div><div id="spike-chart"></div></div>
+<pre id="spike-out" class="perf-panel" style="position: static">Measuring…</pre>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await using IJSObjectReference module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/spikeChart.js");
+            await module.InvokeVoidAsync("run", "spike-chart", "spike-out");
+        }
+    }
+}

@@ -52,6 +52,11 @@ Measure a published Release build: the public site, or `dotnet publish src/RaceR
 bundles copied into `wwwroot/bundles/`, served by any static server. Debug builds are slower. Without `?perf`,
 the loop makes no timing calls. [Spike S0](docs/spikes/S0.md) records the results.
 
+On Windows, publish inside the repository (the default `bin/`, or `artifacts/`), not under `%TEMP%`. Storage
+Sense deletes temporary files that look old, and the publish keeps the package date on `dotnet.js`,
+`web.config`, `_framework/blazor.webassembly.*.js` and `_framework/dotnet.runtime.*.js`. Once those are gone,
+the app no longer starts.
+
 ## Before opening a pull request
 
 CI runs these on Linux, Windows and macOS; the gates run once, on Linux. Run them locally first:

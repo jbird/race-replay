@@ -22,6 +22,7 @@ Real-race data is not redistributed by default. Users build a real race locally 
 | 08 | [Implementation plan](08-implementation-plan.md) | Bootstrap commands, spikes, milestones, contingency and cut line, backlog, definition of done |
 | — | [Architecture decision records](adr/README.md) | The key decisions, with context and consequences |
 | — | [Spike S0: interop and render loop](spikes/S0.md) | Frame times, download size and GitHub Pages behaviour, measured in M1 |
+| — | [Spike S1: OpenF1 data reality check](spikes/S1.md) | Units, location quality, race start, pit timing, race-control wording and the NFR-05 reference, from three real races |
 
 ## One-paragraph summary
 

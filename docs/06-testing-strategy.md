@@ -346,7 +346,7 @@ public sealed class DependencyRuleTests
 
 ## 9. Adapter tests (OpenF1)
 
-- **Recorded fixtures.** These are small, trimmed responses captured once from the real API (2 drivers, about 5 minutes of one race) and stored as JSON under `Fixtures/`. They inherit OpenF1's CC BY-NC-SA licence, and a `README` in the folder says so. A `FakeHttpMessageHandler` maps request URLs to fixture files and fails the test on any unexpected URL.
+- **Recorded fixtures.** These are small, trimmed responses captured once from the real API by spike S1, and stored as JSON under `tests/RaceReplay.TestKit/Fixtures/OpenF1/`. There are three races, each with 2 drivers over 75–90 s, under a 300 KB cap in total ([S1](spikes/S1.md#recorded-fixtures)). They inherit OpenF1's CC BY-NC-SA licence, and a `README` in each folder says so and lists what the excerpt covers. `RecordedFixtureTests` guards the cap, the endpoints, the two-driver limit and the notice. A `FakeHttpMessageHandler` maps request URLs to fixture files and fails the test on any unexpected URL.
 - **What is covered:**
   - URL building, including `date>` / `date<` encoding and windowed location requests;
   - DTO → domain mapping;

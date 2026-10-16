@@ -1,0 +1,153 @@
+@page "/spike/package"
+@attribute [System.Runtime.Versioning.SupportedOSPlatform("browser")]
+@using System.IO.Compression
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using RaceReplay.Bundle
+@using RaceReplay.Web.Interop
+@implements IDisposable
+@inject ReplaySessionHost Host
+
+@* Spike S2 (throwaway, branch spike/s2-browser): open a .rrz the way docs/05 §9.2 plans, and time each step. *@
+
+<PageTitle>S2 package · Race Replay</PageTitle>
+
+<div class="replay">
+    <h1>S2: open a package</h1>
+    <p>The file stays in this browser tab. Nothing is uploaded.</p>
+    <p>
+        <label>
+            Hand-over:
+            <select @bind="_mode">
+                <option value="@InputFileMode">InputFile stream (05 §9.2)</option>
+                <option value="@ArrayBufferMode">File.arrayBuffer() + JSImport</option>
+            </select>
+        </label>
+        <InputFile id="@InputId" accept=".rrz" OnChange="OpenAsync" />
+    </p>
+
+    @if (_error is not null)
+    {
+        <p role="alert">@_error</p>
+    }
+
+    <table class="spike-table">
+        <thead>
+            <tr>
+                <th>#</th><th>File</th><th>Mode</th><th>Bytes</th><th>Event</th><th>Read</th><th>Unzip</th><th>Bundle</th>
+                <th>Open</th><th>First frame</th><th>Total</th><th>Wasm memory</th><th>GC heap</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (Row r in _rows)
+            {
+                <tr>
+                    <td>@r.Index</td><td>@r.File</td><td>@r.Mode</td><td>@r.Bytes.ToString("N0")</td>
+                    <td>@Ms(r.EventMs)</td><td>@Ms(r.ReadMs)</td><td>@Ms(r.UnzipMs)</td><td>@Ms(r.BundleMs)</td>
+                    <td>@Ms(r.OpenMs)</td><td>@Ms(r.FirstFrameMs)</td><td><strong>@Ms(r.TotalMs)</strong></td>
+                    <td>@Mb(r.WasmBytes)</td><td>@Mb(r.GcHeapBytes)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <p>Times in ms. Event: file chosen → .NET handler. Total: file chosen → first car frame drawn. Memory after the load; WebAssembly memory never shrinks.</p>
+
+    <div class="replay-stage">
+        <TrackMap ElementId="@MapId" />
+    </div>
+</div>
+
+@code {
+    private const string InputId = "spike-package-input";
+    private const string MapId = "spike-map";
+    private const string InputFileMode = "inputfile";
+    private const string ArrayBufferMode = "arraybuffer";
+
+    private static readonly JsonSerializerOptions s_json = new() { NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals };
+
+    private readonly List<Row> _rows = [];
+    private string _mode = InputFileMode;
+    private string? _error;
+
+    private sealed record Row(
+        int Index, string File, string Mode, long Bytes, double EventMs, double ReadMs, double UnzipMs, double BundleMs,
+        double OpenMs, double FirstFrameMs, double TotalMs, double WasmBytes, long GcHeapBytes);
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            SpikeInterop.WatchFileInput(InputId);
+        }
+    }
+
+    private async Task OpenAsync(InputFileChangeEventArgs e)
+    {
+        double handler = SpikeInterop.NowMs();
+        double chosen = SpikeInterop.ChangedAtMs();
+        _error = null;
+        Host.Close();
+        try
+        {
+            IBrowserFile file = e.File;
+            byte[] package;
+            if (_mode == InputFileMode)
+            {
+                using MemoryStream buffer = new((int)file.Size);
+                await using (Stream stream = file.OpenReadStream(maxAllowedSize: 64 * 1024 * 1024))
+                {
+                    await stream.CopyToAsync(buffer);
+                }
+
+                package = buffer.Length == buffer.Capacity ? buffer.GetBuffer() : buffer.ToArray();
+            }
+            else
+            {
+                await SpikeInterop.ReadChosenFile(InputId);
+                package = SpikeInterop.TakeHeld();
+            }
+
+            double read = SpikeInterop.NowMs();
+            byte[] manifest, positions;
+            using (ZipArchive zip = new(new MemoryStream(package, writable: false), ZipArchiveMode.Read))
+            {
+                manifest = ReadEntry(zip, BundleFiles.Manifest);
+                positions = ReadEntry(zip, BundleFiles.Positions);
+            }
+
+            double unzipped = SpikeInterop.NowMs();
+            ReplaySession replay = ReplayBundleReader.Read(manifest, positions);
+            double bundled = SpikeInterop.NowMs();
+            Host.Open(replay, MapId, startAt: null);
+            double opened = SpikeInterop.NowMs();
+            double drawn = await SpikeInterop.DriveFirstFrame();
+
+            Row row = new(
+                _rows.Count + 1, file.Name, _mode, file.Size, handler - chosen, read - handler, unzipped - read, bundled - unzipped,
+                opened - bundled, drawn > 0 ? drawn - opened : double.NaN, drawn > 0 ? drawn - chosen : double.NaN,
+                SpikeInterop.WasmMemoryBytes(), GC.GetGCMemoryInfo().HeapSizeBytes);
+            _rows.Add(row);
+            SpikeInterop.Log("S2 package " + JsonSerializer.Serialize(row, s_json));
+        }
+        catch (Exception ex)
+        {
+            _error = $"{ex.GetType().Name}: {ex.Message}";
+            SpikeInterop.Log("S2 package error " + _error);
+        }
+    }
+
+    private static byte[] ReadEntry(ZipArchive zip, string name)
+    {
+        ZipArchiveEntry entry = zip.GetEntry(name) ?? throw new InvalidDataException($"No {name} in the package.");
+        byte[] bytes = new byte[entry.Length];
+        using Stream stream = entry.Open();
+        stream.ReadExactly(bytes);
+        return bytes;
+    }
+
+    private static string Ms(double ms) => double.IsNaN(ms) ? "–" : ms.ToString("F1");
+
+    private static string Mb(double bytes) => bytes < 0 ? "?" : (bytes / 1_000_000).ToString("F1") + " MB";
+
+    public void Dispose() => Host.Close();
+}

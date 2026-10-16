@@ -43,6 +43,7 @@ export function init(hostId, centreline, rotationDegrees, acronyms, colours, out
   observer.observe(host);
   watchDevicePixelRatio();
   resize();
+  globalThis.__s2FirstDraw = 0; // spike S2: time of the first car frame after init
 }
 
 // frameView is a MemoryView over .NET memory, valid only during this call: copy it, never keep it.
@@ -58,6 +59,7 @@ export function drawCars(frameView, frameStride) {
   } else {
     paint();
   }
+  if (!globalThis.__s2FirstDraw) globalThis.__s2FirstDraw = performance.now(); // spike S2
 }
 
 // ?perf: canvas time spent drawing cars since the last call.

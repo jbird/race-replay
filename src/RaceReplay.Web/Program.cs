@@ -33,7 +33,8 @@ if (OperatingSystem.IsBrowser())
     // Fetched in parallel, so startup waits for one round trip rather than two.
     await Task.WhenAll(
         JSHost.ImportAsync(RenderLoopInterop.Module, "../js/renderLoop.js"),
-        JSHost.ImportAsync(TrackMapInterop.Module, "../js/trackMap.js"));
+        JSHost.ImportAsync(TrackMapInterop.Module, "../js/trackMap.js"),
+        JSHost.ImportAsync(SpikeInterop.Module, "../js/spike.js"));
 }
 
 await builder.Build().RunAsync();

@@ -169,7 +169,7 @@ All `Time` values are **seconds since `ReplayTimeline.T0Utc`**. Absolute timesta
 
 ## 3. Coordinates, units and time
 
-- **Coordinates.** OpenF1 `x`, `y`, `z` are integers in a per-circuit Cartesian frame with an arbitrary origin. Their units are believed to be **decimetres** (FastF1 documents the same feed in 1/10 m). Spike S1 confirms this by comparing the built centreline length with the official circuit length. The domain keeps the native units ("track units"). `TrackModel.UnitsPerMetre` (default 10) converts to metres for display and for speed-based thresholds.
+- **Coordinates.** OpenF1 `x`, `y`, `z` are integers in a per-circuit Cartesian frame with an arbitrary origin. Their units are **decimetres** (FastF1 documents the same feed in 1/10 m). Spike S1 confirmed this: clean racing-line laps measure 9.76–9.87 units per metre of official lap length, 1–2.5 % short because the racing line cuts corners ([S1](spikes/S1.md#coordinate-units)). The domain keeps the native units ("track units"). `TrackModel.UnitsPerMetre` (default 10) converts to metres for display and for speed-based thresholds.
 - **Height (`z`)** is carried through cleaning but not used. It is not stored in bundles.
 - **Lateral placement.** OpenF1 describes location as approximate and *lacking lateral detail*. The design therefore never infers left/right track position.
 - **Time.** Internally, time is `double` seconds relative to `T0Utc`, which is the first sample time rounded down to a whole second. `DateTimeOffset` appears only at the edges. Double precision gives sub-microsecond resolution over a day, which is far more than needed.
@@ -179,12 +179,12 @@ All `Time` values are **seconds since `ReplayTimeline.T0Utc`**. Absolute timesta
 `LocationCleaner` turns a raw per-driver stream into one or more continuous runs.
 
 1. **Sort and de-duplicate** by timestamp. Keep the last sample for identical timestamps.
-2. **Drop placeholder samples** where `x == y == z == 0`. These are seen in live-timing-derived position feeds for cars not on track; spike S1 confirms how often they appear.
+2. **Drop placeholder samples** where `x == y == z == 0`. Spike S1 found them only before a car first moves, after it stops or retires, and for the whole of a non-starter, never mid-run ([S1](spikes/S1.md#location-quality)).
 3. **Reject spikes.** A sample *pᵢ* is an outlier if:
    - its implied speed from *pᵢ₋₁* **and** to *pᵢ₊₁* both exceed `MaxSpeed` (default 120 m/s ≈ 430 km/h), **and**
    - *pᵢ₋₁* → *pᵢ₊₁* is itself plausible.
 
-   This removes isolated glitches without deleting real high-speed motion.
+   This removes isolated glitches without deleting real high-speed motion. It also tolerates timestamp jitter: in S1, consecutive-pair speeds over `MaxSpeed` were common (150–350 per car-hour), while real glitches over spans of 0.5 s or more were 0.1–2.4 per car-hour. So never reject a sample on one pair alone.
 4. **Split on gaps.** If Δt between consecutive samples exceeds `MaxGap` (default 2.0 s), the trace is split into separate runs. Later stages never interpolate across a split. Those grid points are marked invalid instead.
 5. **Report.** The counts of dropped, de-duplicated and split samples go into the build diagnostics.
 
@@ -275,7 +275,7 @@ for (int k = 0; k < s.Length; k++)
 
 Three corrections follow, applied in this order.
 
-1. **Lap anchoring.** Free unwrapping from the first sample counts the formation lap and any pre-race running. Using the `laps` endpoint, the time *T₁* at which lap 1 starts is the race start. For each car an integer offset *n* is chosen so that *d(T₁) ∈ (−L/2, L/2]*. Cars on the grid sit just behind the line, so their *d* is slightly negative at the start. Then *n·L* is subtracted from the whole trace. Each later lap boundary *Tₙ* is checked: if *|d(Tₙ) − (n−1)·L| > L/2* a diagnostic is raised, because the trace probably lost a crossing.
+1. **Lap anchoring.** Free unwrapping from the first sample counts the formation lap and any pre-race running. The race start *T₁* is race control's first `SESSION STARTED` after the scheduled start, which is the same instant as the lap 1 `date_start` shared by every starter (spike S1). Use the race's *T₁* for every car: pit-lane starters have no lap 1 record, and a non-starter's can be wrong. If race control is missing, take the most common lap 1 `date_start`. For each car an integer offset *n* is chosen so that *d(T₁) ∈ (−L/2, L/2]*. Cars on the grid sit just behind the line, so their *d* is slightly negative at the start. Then *n·L* is subtracted from the whole trace. Each later lap boundary *Tₙ* is checked: if *|d(Tₙ) − (n−1)·L| > L/2* a diagnostic is raised, because the trace probably lost a crossing.
 2. **Plausibility gate.** Before any running maximum is taken, each progress step is checked against what a car can physically cover:
 
    ```text
@@ -293,7 +293,7 @@ Three corrections follow, applied in this order.
 ### 7.1 Timeline
 
 - `T0Utc` = earliest valid sample across all cars, rounded down to a whole second.
-- `SampleRateHz` = `TimelineHz` (default **4 Hz**, just above the raw ~3.7 Hz to avoid aliasing).
+- `SampleRateHz` = `TimelineHz` (default **4 Hz**, just above the raw rate, which S1 measured at 3.8–3.9 Hz on average with Δt p50 0.24 s).
 - `SampleCount` = ⌈(latest sample − T0) × Hz⌉ + 1.
 - `RaceStart` = *T₁* − T0 (from §6.3).
 
@@ -395,11 +395,11 @@ Sorting 20 items is trivially cheap. The client recomputes order at the UI refre
 
 | Extractor | Source | Output |
 |---|---|---|
-| `PitStopExtractor` | `pit` (`date`, `lap_number`, `lane_duration`, `stop_duration`) | `PitStopEvent`. Spike S1 confirms whether `date` marks entry, box or exit. `stop_duration` only exists from the 2024 US GP onwards, so it is nullable. |
-| `TrackStatusExtractor` | `race_control` with categories `SafetyCar` and `Flag` | `TrackStatusEvent` with start and end. Message patterns ("SAFETY CAR DEPLOYED", "VIRTUAL SAFETY CAR ENDING", flag `RED`, `GREEN`, …) are configurable and covered by fixture tests. |
+| `PitStopExtractor` | `pit` (`date`, `lap_number`, `lane_duration`, `stop_duration`) | `PitStopEvent`. `date` marks the pit-lane exit (spike S1), so the pit window is [`date − lane_duration`, `date`]. Records inside a `Suspended` segment are cars waiting during a red flag and are dropped. `stop_duration` only exists from the 2024 US GP onwards, so it is nullable. |
+| `TrackStatusExtractor` | `race_control` with categories `SafetyCar` and `Flag` | `TrackStatusEvent` with start and end. Message patterns are configurable and covered by fixture tests. The defaults are the strings seen in S1: "SAFETY CAR DEPLOYED" … "SAFETY CAR IN THIS LAP", and "VIRTUAL SAFETY CAR DEPLOYED" … "VIRTUAL SAFETY CAR ENDING" ([S1](spikes/S1.md#race_control-wording)). |
 | `RetirementExtractor` | `session_result` (`dnf`) plus last valid sample | `RetirementEvent` at the last moment of motion |
 | `ChequeredFlagExtractor` | `race_control` flag `CHEQUERED` | `ChequeredFlagEvent` |
-| `SegmentBuilder` (built-in) | Race start, red-flag windows, chequered flag | `PreRace`, `Racing`, `Suspended`, `PostRace` segments |
+| `SegmentBuilder` (built-in) | `race_control` `SessionStatus`: `SESSION STARTED` (race start, and resumption), `SESSION ABORTED` (with flag `RED`); flag `CHEQUERED` | `PreRace`, `Racing`, `Suspended` (from `SESSION ABORTED` to the next `SESSION STARTED`), `PostRace` segments |
 
 **Red-flag fallback.** If race control data is missing, a suspension is inferred when every car's progress stalls for more than `SuspensionStallSeconds` (default 60 s).
 
@@ -409,8 +409,8 @@ All parameters live in options records bound from configuration and validated at
 
 | Option | Default | Used by | Notes |
 |---|---|---|---|
-| `MaxSpeed` | 120 m/s | Cleaner, projector | Spike rejection and search window |
-| `MaxGap` | 2.0 s | Cleaner, resampler | Never interpolate across larger gaps |
+| `MaxSpeed` | 120 m/s | Cleaner, projector | Spike rejection and search window. S1: real speed p99.9 107–113 m/s over spans ≥ 0.5 s |
+| `MaxGap` | 2.0 s | Cleaner, resampler | Never interpolate across larger gaps. S1: no gaps over 2 s while a car runs; Δt p99.9 ≈ 1.05 s |
 | `ReferenceLapCount` | 5 | Centreline | Fewer if not enough clean laps |
 | `CentrelineSpacing` | 5 m | Centreline | About 1,000 points for a 5 km lap |
 | `SmoothingWindow` | 5 points | Centreline | Circular moving average |
@@ -423,7 +423,7 @@ All parameters live in options records bound from configuration and validated at
 | `TimelineHz` | 4 | Resampler | Bundle size scales linearly |
 | `GapHz` | 1 | Gap calculator | Enough resolution for the chart |
 | `SuspensionStallSeconds` | 60 s | Segment builder | Red-flag fallback heuristic |
-| `UnitsPerMetre` | 10 | Everywhere | Confirmed in spike S1 |
+| `UnitsPerMetre` | 10 | Everywhere | Confirmed in spike S1 (decimetres) |
 
 ## 10. Edge cases
 
@@ -459,6 +459,6 @@ All parameters live in options records bound from configuration and validated at
 | `CoverageValidator` | Fraction of valid grid points per car during `Racing` segments | < 95 % for a finisher → warning |
 | `PlausibilityValidator` | Counts `ForwardJump` rejections and unconfirmed re-acquisitions per car | Any car with > 1 % of samples rejected → warning |
 
-**The thresholds are provisional.** The figures above are informed estimates, not measurements. Spike S1 runs the validators on three real races, and the thresholds are then confirmed or revised in this table and in NFR-05.
+**The thresholds are provisional.** The figures above are informed estimates, not measurements. Spike S1 couldn't run the validators yet, because they need the M2 pipeline. It compared OpenF1's own sources instead: lap-line gaps from `laps` against `intervals` agree to a median of 0.03–0.06 s (p95 0.15–0.19 s), and lap-line order agrees with `position` 100 % of the time ([S1](spikes/S1.md#nfr-05-first-read-q6)). The reference is sharp enough for these thresholds. RR-080 runs the validators on the three S1 races in M7 and confirms or revises them here and in NFR-05.
 
 The report includes per-driver error tables, so systematic issues are easy to spot. An example is one car's projection repeatedly snapping in the pit lane. Order and gap checks fail in different ways: a gap can look statistically fine while two cars are swapped, so both are kept.

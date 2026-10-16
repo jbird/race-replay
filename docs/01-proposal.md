@@ -141,7 +141,7 @@ The combination is the point: scrubbable replay, a synchronised continuous gap c
 | NFR-02 | Performance | Seeking to any time renders the new frame within one animation frame. | Sampler is O(cars). Manual check plus a test asserting no data-dependent loops |
 | NFR-03 | Load time | First paint of a demo replay in < 5 s on a 50 Mbit/s connection, cold cache. Opening a local package renders in < 1 s after file selection. | DevTools measurement in M7 |
 | NFR-04 | Size | Replay package for a ~2 h race ≤ 6 MB, with a target of ≤ 3 MB over the wire when hosted. | Build report emits sizes; CI warns over budget |
-| NFR-05 | Accuracy | **Provisional:** derived gap-to-leader within 0.5 s (median) and 1.5 s (95th percentile) of OpenF1 intervals during green-flag running, and derived running order agreeing with OpenF1 positions for ≥ 95 % of compared samples. Confirmed or revised after spike S1. | `race-replay validate` for fixture sessions |
+| NFR-05 | Accuracy | **Provisional:** derived gap-to-leader within 0.5 s (median) and 1.5 s (95th percentile) of OpenF1 intervals during green-flag running, and derived running order agreeing with OpenF1 positions for ≥ 95 % of compared samples. Spike S1 found the OpenF1 reference sharp enough for these thresholds; RR-080 confirms or revises them on fixture races in M7. | `race-replay validate` for fixture sessions |
 | NFR-06 | Maintainability | Project references follow the dependency rules in [02](02-architecture.md#4-dependency-rules). | Architecture tests fail the build on violation |
 | NFR-07 | Testability | ≥ 85 % line coverage on Domain, Analysis, Bundle and Playback. All core tests deterministic (no network, no wall clock). | Coverage gate in CI |
 | NFR-08 | Portability | Runs on current evergreen browsers (Chromium, Firefox, Safari) on desktop. Mobile layout is usable but not optimised for MVP. | Manual matrix in M7 |
@@ -230,12 +230,12 @@ Details, exit criteria and the issue backlog are in [08 — Implementation plan]
 
 | # | Question | Resolved by |
 |---|---|---|
-| Q1 | Which instant does `pit.date` represent (pit entry, box, or exit)? | Spike S1 |
-| Q2 | How should race start be detected reliably? Options: race control messages, lap 1 `date_start`, or a motion onset heuristic. | Spike S1 |
+| Q1 | Which instant does `pit.date` represent (pit entry, box, or exit)? | **Answered by S1:** the pit-lane exit; the pit window is [`date − lane_duration`, `date`] ([S1](spikes/S1.md#pitdate-q1)) |
+| Q2 | How should race start be detected reliably? Options: race control messages, lap 1 `date_start`, or a motion onset heuristic. | **Answered by S1:** race control's `SESSION STARTED`, the same instant as the common lap 1 `date_start`; motion onset − 1 s as the fallback ([S1](spikes/S1.md#race-start-q2)) |
 | Q3 | Do `InputFile` and `ZipArchive` behave well in browser-wasm for 5–10 MB packages? Is compressing hosted bundles worth it? Does in-browser Brotli decoding of the framework work with .NET 10 fingerprinted assets on Pages? | Spike S2 |
 | Q4 | Should AOT compilation be enabled for the WebAssembly client (bigger download vs. faster frames)? | M7 measurement |
 | Q5 | Should the client compute gaps itself (smaller package) instead of shipping precomputed gaps? | Revisit after M5 with real sizes |
-| Q6 | Are the provisional NFR-05 thresholds realistic? | Spike S1 |
+| Q6 | Are the provisional NFR-05 thresholds realistic? | **First read in S1:** yes. OpenF1's two timing sources agree to about 0.05 s, so the reference is sharp enough. RR-080 confirms them with the real pipeline in M7 ([S1](spikes/S1.md#nfr-05-first-read-q6)) |
 
 ## 15. Glossary
 

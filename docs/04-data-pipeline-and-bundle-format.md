@@ -36,10 +36,10 @@ OpenF1 serves free historical data, from the 2023 season onward, without authent
 | `sessions` | Session metadata, catalogue listing | `session_key`, `session_name`, `session_type`, `circuit_key`, `circuit_short_name`, `country_name`, `date_start`, `date_end`, `year`, `meeting_key`, `is_cancelled` | Updated daily at midnight UTC |
 | `meetings` | Grand Prix name | `meeting_name`, `meeting_key`, `circuit_key` | |
 | `drivers` | Names, team, colour per session | `driver_number`, `name_acronym`, `full_name`, `broadcast_name`, `team_name`, `team_colour` | `country_code` is deprecated and not read |
-| `location` | Car positions | `date`, `driver_number`, `x`, `y`, `z` | About 3.7 Hz. Approximate. Arbitrary origin. No lateral detail. |
+| `location` | Car positions | `date`, `driver_number`, `x`, `y`, `z` | About 3.8–3.9 Hz on a common clock (Δt p50 0.24 s), with no gaps over 2 s while a car runs; timestamps jitter. `(0,0,0)` only before a car runs, after it stops, and for non-starters (S1). Approximate. Arbitrary origin. No lateral detail. |
 | `laps` | Lap anchors, reference laps | `driver_number`, `lap_number`, `date_start`, `lap_duration`, `is_pit_out_lap` | `date_start` is approximate. Mini-sector segments are not available in races. |
-| `pit` | Pit events, pit windows | `date`, `driver_number`, `lap_number`, `lane_duration`, `stop_duration` | `pit_duration` is deprecated (removed after 2026). `stop_duration` exists from the 2024 US GP onwards. |
-| `race_control` | Flags, safety car, suspensions | `date`, `category`, `flag`, `scope`, `lap_number`, `driver_number`, `message` | |
+| `pit` | Pit events, pit windows | `date`, `driver_number`, `lap_number`, `lane_duration`, `stop_duration` | `pit_duration` is deprecated (removed after 2026). `stop_duration` exists from the 2024 US GP onwards. `date` marks the pit-lane exit (S1). Cars waiting in the pit lane during a red flag get records too. |
+| `race_control` | Flags, safety car, suspensions, session status | `date`, `category`, `flag`, `scope`, `lap_number`, `driver_number`, `message` | `SessionStatus` messages (`SESSION STARTED`, `SESSION ABORTED`, `SESSION FINISHED`) mark the start, suspensions and finish. Exact wording in [S1](spikes/S1.md#race_control-wording). |
 | `session_result` | Classification, laps completed, DNF | `driver_number`, `position`, `number_of_laps`, `dnf`, `dns`, `dsq` | Available minutes after official results |
 | `intervals` | **Validation only** (gap accuracy) | `date`, `driver_number`, `gap_to_leader`, `interval` | About 4 s updates, races only. Values are a number, `"+N LAP(S)"`, or `null`. |
 | `position` | **Validation only** (running order) | `date`, `driver_number`, `position` | Initial placement plus each subsequent change, not periodic samples |
@@ -135,6 +135,8 @@ static PartitionedRateLimiter<HttpRequestMessage> CreateOpenF1Limiter(OpenF1Opti
 
 Limits are configuration (`OpenF1:RequestsPerSecond`, `OpenF1:RequestsPerMinute`), so a sponsor-tier key or a future policy change needs no code change. The limiters use the default system clock. Tests exercise the handler with tiny windows, and assert ordering rather than wall-clock timing.
 
+**`429` still happens.** In spike S1, 70 requests paced at exactly these limits drew two `429 Too Many Requests` responses, with `Retry-After` of 1 s and 60 s ([S1](spikes/S1.md#response-size-and-time)). The resilience pipeline (§3.1) must therefore treat `429` as transient and wait for `Retry-After` before retrying.
+
 ### 3.3 Response cache
 
 - **Key:** SHA-256 of the normalised request URL (path plus query parameters sorted by name).
@@ -190,8 +192,8 @@ For a typical race session:
 | `race_control?session_key=…` | 1 | ~30 KB |
 | `intervals?session_key=…` | 1 | ~2 MB |
 | `position?session_key=…` | 1 | ~100 KB |
-| `location?session_key=…&driver_number=N` | 20 (one per driver) | ~3–4 MB each |
-| **Total** | **≈ 29** | **≈ 70–80 MB** |
+| `location?session_key=…&driver_number=N` | 20 (one per driver) | ~4–6 MB each, 2–5 s (S1) |
+| **Total** | **≈ 29** | **≈ 90–125 MB** |
 
 At 30 requests per minute this takes **about one minute** of rate-limited time, plus transfer time.
 

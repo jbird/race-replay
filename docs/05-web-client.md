@@ -402,9 +402,9 @@ public interface IReplaySource
 ### 9.1 From the site (`HttpReplaySource`): demo and hosted races
 
 1. Fetch `catalog.json` (cached for the session) and resolve the path for the id.
-2. Fetch `manifest.json`, then the `.rrb` files in parallel. Read response streams in chunks to report progress (`Content-Length` where available).
-3. If spike S2 chose compressed files, decompress.
-4. `ReplayBundleReader.Read(...)` → `ReplaySession`. Dequantising happens once here, taking about 20–50 ms.
+2. Fetch `manifest.json`, then the `.rrb` files in parallel. Read response streams in chunks to report progress against the manifest's byte counts. Pages gzips the responses, so `Content-Length` is the compressed size.
+3. There is nothing to decompress: the browser inflates the gzipped responses as they arrive (option D, [04 §9](04-data-pipeline-and-bundle-format.md#9-compression-and-hosting-spike-s2)).
+4. `ReplayBundleReader.Read(...)` → `ReplaySession`. Decoding happens once here, in one pass: running sums for the delta encodings, then dequantising. Spike S2 measured 49–56 ms warm and 117–157 ms cold for a 2-hour race.
 
 ### 9.2 From the user's disk (`LocalPackageReplaySource`): real races
 
@@ -453,9 +453,9 @@ public interface IReplaySource
 | Cursor overlay move | < 0.1 ms | CSS transform only |
 | Blazor re-render (10 Hz) | < 4 ms | Tower ~20 rows with `@key` |
 | Managed allocations per frame | 0 B | Unit-tested |
-| App download (over the wire) | ≤ 3 MB | Trimmed, Brotli-decoded on Pages (§12); measured in S2/M7 |
-| Demo or hosted bundle download (over the wire) | ≤ 3 MB | NFR-04 |
-| Open a local 6 MB package | < 1 s to first frame | NFR-03; measured in S2 |
+| App download (over the wire) | ≤ 3 MB | Trimmed. About 2.73 MB as Pages gzips it today (S2); relinking and Brotli decoding (§12) are RR-070's |
+| Demo or hosted bundle download (over the wire) | ≤ 3 MB | NFR-04. A 2-hour race's `positions.rrb` is 1.93 MB with the delta encodings (S2) |
+| Open a local 6 MB package | < 1 s to first frame | NFR-03. 348–480 ms cold in S2 (Chrome 155 and Firefox 157 on a 2015 desktop) |
 
 If frame time is over budget on target hardware, the levers in order are:
 
@@ -508,12 +508,12 @@ Blazor.start({
 
 - **Keep the `.br` files.** `assemble-site.sh` keeps them and deletes only the unused `.gz` copies. The earlier draft deleted both, which threw away the compression.
 - **Integrity.** The decoded bytes are the original file, so Blazor's integrity checks still pass. The site is uploaded as a built artifact, never committed to a branch, so Git line-ending conversion can't alter files after hashing.
-- **To confirm in spikes S0 and S2:**
-  - the approach works with .NET 10 fingerprinted file names;
-  - what Pages already compresses on its own;
-  - whether the decoder's CPU cost is acceptable on a mid-range laptop.
+- **What spikes S0 and S2 found:**
+  - the approach works with .NET 10 fingerprinted file names (S0);
+  - Pages already gzips every response, `.wasm` included, much like zlib at level 5, and never sends Brotli (S0, S2);
+  - so Brotli saves only about 0.3 MB over Pages' gzip, for about 140 ms of decoding on a 2015 desktop (S0).
 
-  If Pages turns out to gzip `.wasm` responses already, the simpler option of relying on that is compared on transfer size and startup time.
+  RR-070 (#37) decides whether that pays off, once the decoder's cost on a mid-range laptop is known. Relinking the native runtime in CI saves about 0.6 MB at no runtime cost, and comes first.
 
 ### 12.3 Headers and caching
 

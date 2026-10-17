@@ -19,10 +19,9 @@ public sealed class RecordedFixtureTests
         "sessions", "meetings", "drivers", "location", "laps", "pit", "race_control", "session_result", "intervals", "position",
     };
 
-    private static readonly string s_root = RepositoryFiles.PathTo("tests", "RaceReplay.TestKit", "Fixtures", "OpenF1");
+    private static readonly string s_root = RecordedFixtures.Root;
 
-    public static TheoryData<string> Folders =>
-        [.. Directory.EnumerateDirectories(s_root).Select(d => Path.GetFileName(d)!).Order(StringComparer.Ordinal)];
+    public static TheoryData<string> Folders => [.. RecordedFixtures.Races];
 
     [Fact]
     public void Fixtures_Exist()

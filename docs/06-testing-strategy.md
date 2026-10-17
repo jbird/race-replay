@@ -142,8 +142,8 @@ Tests use both.
 | `SyntheticTrack.Stadium(straight, radius)` | Two straights + two semicircles | Start/finish placement, uniform resampling |
 | `SyntheticTrack.FigureEight(size)` | Self-crossing loop | Projection never jumps branch at the crossing |
 | `SyntheticTrack.WithParallelPitLane(offsetMetres)` | Stadium plus a parallel pit path | Pit tolerance; no backwards snaps |
-| `SyntheticCar.ConstantSpeed(track, speed, startProgress)` | Uniform motion, sampled at about 3.7 Hz with optional jitter | Gaps, ordering, laps |
-| `.WithDropout(from, to)` / `.WithSpike(at)` / `.WithZeroPlaceholder(at)` / `.Retires(at)` / `.PitStop(at, duration)` | Fault injection | Cleaning, validity, events |
+| `SyntheticCar.ConstantSpeed(track, speed, startProgress)` | Uniform motion, sampled at about 3.7 Hz. `.WithTimestampJitter(sd, max, seed)` shifts timestamps but not positions, as OpenF1's do (S1). | Gaps, ordering, laps |
+| `.WithDropout(from, to)` / `.WithSpike(at)` / `.WithZeroPlaceholder(at)` / `.WithDuplicate(at)` / `.WithOutOfOrder(at)` / `.Retires(at)` / `.PitStop(at, duration)` | Fault injection | Cleaning, validity, events |
 | `.WithSnapAhead(at, metres)` | One sample placed on a parallel section of track further round the lap. It is plausible as a position, so the cleaner keeps it, but wrong as progress. | Re-acquisition rule, plausibility gate, envelope speed limit |
 | `SyntheticSession.Race()` | Composes cars into `RawSessionData` with analytic laps, results and race control | End-to-end build tests |
 | `SyntheticRaceGenerator.Generate(seed, FaultProfile.Harsh)` | Full procedural race with incidents, plus exact ground truth | Ground-truth regression (below) |

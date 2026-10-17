@@ -3,4 +3,8 @@
     <ProjectReference Include="..\..\src\RaceReplay.Analysis\RaceReplay.Analysis.csproj" />
     <ProjectReference Include="..\RaceReplay.TestKit\RaceReplay.TestKit.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CsCheck" />
+  </ItemGroup>
 </Project>

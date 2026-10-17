@@ -96,6 +96,36 @@ public sealed class TimelineResamplerTests
             () => new TimelineResampler(new ResamplingOptions { TimelineHz = hz, MaxGapSeconds = maxGap }));
 
     [Fact]
+    public void Resample_CleanedTrace_NeverInterpolatesBetweenRuns()
+    {
+        // A cleaner with a 1 s limit splits this 1.5 s gap; the resampler alone (2 s) would bridge it.
+        RawLocationSample[] samples = [At(0, 0, 10), At(0.5, 50, 10), At(2, 200, 10), At(2.5, 250, 10)]; // y = 10: never a placeholder
+        CleanedTrace trace = new LocationCleaner(new CleaningOptions { MaxGapSeconds = 1 }).Clean(s_driver, samples);
+
+        CarChannels raw = s_resampler.Resample(s_driver, samples, s_base, 11);
+        CarChannels cleaned = s_resampler.Resample(trace, s_base, 11);
+
+        Assert.Equal(2, trace.Runs.Count);
+        Assert.True(raw.Valid[4]);                                  // 1.0 s, inside the gap
+        Assert.Equal([true, true, true, false, false, false, false, false, true, true, true],
+            Enumerable.Range(0, 11).Select(k => cleaned.Valid[k])); // 0.75–1.75 s fall between the runs
+        Assert.Equal(200, cleaned.X.Span[8]);
+    }
+
+    [Fact]
+    public void Resample_CleanedTraceWithOneRun_MatchesTheRawSamples()
+    {
+        RawLocationSample[] samples = [.. Enumerable.Range(0, 20).Select(i => At(i * 0.27, i * 27, 500))];
+        CleanedTrace trace = new LocationCleaner(new CleaningOptions()).Clean(s_driver, samples);
+
+        CarChannels raw = s_resampler.Resample(s_driver, samples, s_base, 21);
+        CarChannels cleaned = s_resampler.Resample(trace, s_base, 21);
+
+        Assert.Equal(raw.X.ToArray(), cleaned.X.ToArray());
+        Assert.Equal(raw.Valid.Bits.ToArray(), cleaned.Valid.Bits.ToArray());
+    }
+
+    [Fact]
     public void TimelineHz_Default_IsFour() => Assert.Equal(4, s_resampler.TimelineHz);
 
     private static RawLocationSample At(double seconds, int x, int y) =>

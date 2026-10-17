@@ -69,6 +69,34 @@ public sealed class TimelineResampler
     public CarChannels Resample(DriverNumber driver, IReadOnlyList<RawLocationSample> samples, DateTimeOffset t0, int sampleCount)
     {
         ArgumentNullException.ThrowIfNull(samples);
+        return Resample(driver, samples, startsRun: null, t0, sampleCount);
+    }
+
+    /// <summary>
+    /// As above, for a trace the <see cref="LocationCleaner"/> has split into runs. The runs decide: no grid point is
+    /// interpolated between two of them, whatever <see cref="ResamplingOptions.MaxGapSeconds"/> allows (docs/03 §4).
+    /// </summary>
+    public CarChannels Resample(CleanedTrace trace, DateTimeOffset t0, int sampleCount)
+    {
+        ArgumentNullException.ThrowIfNull(trace);
+        RawLocationSample[] samples = [.. trace.Runs.SelectMany(run => run)];
+        bool[] startsRun = new bool[samples.Length];
+        int first = 0;
+        foreach (IReadOnlyList<RawLocationSample> run in trace.Runs)
+        {
+            if (run.Count > 0)
+            {
+                startsRun[first] = true;
+                first += run.Count;
+            }
+        }
+
+        return Resample(trace.Driver, samples, startsRun, t0, sampleCount);
+    }
+
+    private CarChannels Resample(
+        DriverNumber driver, IReadOnlyList<RawLocationSample> samples, bool[]? startsRun, DateTimeOffset t0, int sampleCount)
+    {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleCount);
 
         float[] x = new float[sampleCount];
@@ -95,7 +123,8 @@ public sealed class TimelineResampler
                 (lastX, lastY) = (samples[next].X, samples[next].Y);
                 valid[k] = true;
             }
-            else if (next > 0 && next < times.Length && times[next] - times[next - 1] <= _options.MaxGapSeconds)
+            else if (next > 0 && next < times.Length && times[next] - times[next - 1] <= _options.MaxGapSeconds
+                && startsRun?[next] != true)
             {
                 RawLocationSample a = samples[next - 1], b = samples[next];
                 double alpha = (t - times[next - 1]) / (times[next] - times[next - 1]);

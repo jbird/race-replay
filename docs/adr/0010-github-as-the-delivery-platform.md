@@ -69,7 +69,7 @@ The project is hosted on GitHub. That is a requirement, not an open question. Se
   - SHA-pinned actions are less readable. Version comments and Dependabot mitigate that.
   - Immutable releases can't be patched: a bad release is fixed by a new version.
 - **Follow-ups:**
-  - Spikes S0 and S2 confirm Brotli decoding with .NET 10 fingerprinted assets, and measure what Pages already compresses.
+  - Spikes S0 and S2 confirm Brotli decoding with .NET 10 fingerprinted assets, and measure what Pages already compresses. **Done:** decoding works with fingerprinted names (S0). Pages gzips everything it serves, much like zlib at level 5, and never sends Brotli (S0, S2). RR-070 (#37) decides whether Brotli decoding pays off.
   - Proposals to the shared template (Dependabot `dotnet-sdk`, rulesets, dev container, Brotli decoding for Pages) go through its PR process.
 
 ## Revisit when

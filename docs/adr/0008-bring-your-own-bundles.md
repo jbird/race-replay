@@ -55,7 +55,7 @@ Adopt **option B**.
   - Sharing a real race means sharing a file. The UI notes that the file carries CC BY-NC-SA obligations.
   - Deep links to local packages restore time and focus only after the file is opened.
 - **Follow-ups:**
-  - Spike S2 confirms that `InputFile` and `ZipArchive` work in browser-wasm for 5–10 MB packages.
+  - Spike S2 confirms that `InputFile` and `ZipArchive` work in browser-wasm for 5–10 MB packages. **Done:** they do. A 6–10 MB package reaches its first frame 348–561 ms after it is chosen, cold, in Chrome and Firefox, and WebAssembly memory levels off at 145 MB ([S2](../spikes/S2.md#chrome-on-claudes-machine)).
   - The deploy workflow fails if a non-synthetic manifest (`provenance.source` other than `synthetic`) reaches the public artifact while hosted mode is off.
 
 ## Revisit when

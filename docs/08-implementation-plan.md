@@ -164,12 +164,13 @@ Each spike is time-boxed. Its output is a short note in `docs/spikes/Sx.md`. Whe
 - **Question:** Do local packages and hosted bundles work well in the browser, at the smallest transfer for acceptable complexity (Q3)?
 - **Measure:**
   - **Local packages.** `InputFile` → `MemoryStream` → `ZipArchive` with a 6 MB and a 10 MB `.rrz`: time to first frame, peak memory, behaviour in Safari.
-  - **Hosted bundles.** Deploy a 5 MB `.rrb`, its `.rrb.gz`, and a delta-encoded variant. Compare `Content-Encoding`, transfer size, and decompression time in .NET (`GZipStream` on browser-wasm) vs JS (`DecompressionStream`).
+  - **Hosted bundles.** Build a 5 MB `.rrb` in raw, gzipped and delta-encoded variants. Pages deploys only from `main`, so predict each variant's transfer from a fit of Pages' gzip to the deployed demo bundles. Compare decompression time in .NET (`GZipStream` on browser-wasm) vs JS (`DecompressionStream`).
 - **Decide:**
-  - Option A, B or C for hosted bundles ([04 §9](04-data-pipeline-and-bundle-format.md#9-compression-and-hosting-spike-s2)).
+  - Option A, B, C or D for hosted bundles ([04 §9](04-data-pipeline-and-bundle-format.md#9-compression-and-hosting-spike-s2)). S2 added D: delta-encoded files, gzipped by Pages.
   - Stored or deflated entries for packages.
 
   Record both as an ADR-0004 addendum.
+- **Outcome ([S2](spikes/S2.md#decisions)):** option D, with the delta encodings in schema 1.0, and deflated package entries.
 
 ## 4. Milestones
 
@@ -235,6 +236,7 @@ Each spike is time-boxed. Its output is a short note in `docs/spikes/Sx.md`. Whe
 | Deliverable | Notes |
 |---|---|
 | Final manifest DTOs; polymorphic events; provenance with `source` | [04 §7.2](04-data-pipeline-and-bundle-format.md#72-manifestjson) |
+| Delta encodings for X, Y and progress; deflated package entries | [04 §7.3](04-data-pipeline-and-bundle-format.md#73-binary-container-rrb), from spike S2 |
 | `.rrz` package writer/reader (allow-list, size caps); `FileSystemReplayPackageStore` (both layouts) | [04 §7.1](04-data-pipeline-and-bundle-format.md#71-layouts) |
 | `race-replay schema` plus the committed schemas; golden schema test | [04 §10](04-data-pipeline-and-bundle-format.md#10-versioning-and-compatibility) |
 | Golden bytes, determinism (including the de-DE culture), malformed-input and package-hardening tests | [06 §7](06-testing-strategy.md#7-golden-file-and-determinism-tests) |

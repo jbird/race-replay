@@ -300,7 +300,7 @@ A bundle is always the same three logical files. They are stored in one of two l
 **Package (default)**: one file the user opens in the app (ADR-0008):
 
 ```text
-2025-9839.rrz          # ZIP archive, entries stored uncompressed by default
+2025-9839.rrz          # ZIP archive, deflated entries
 ├─ manifest.json       # metadata, track, drivers, events, channel index (JSON)
 ├─ positions.rrb       # x, y, progress, validity per car (binary)
 ├─ gaps.rrb            # gap-to-leader per car (binary)
@@ -325,7 +325,7 @@ bundles/
 - Entries are read with `System.IO.Compression.ZipArchive` from an in-memory stream, which works in the browser.
 - Only the four entry names above are accepted. Any other entry, path separator or `..` causes rejection, so there is no path traversal.
 - Each entry's uncompressed size is capped (16 MB).
-- Entries are *stored* (uncompressed) by default, so reading needs no inflate step. Spike S2 checks whether deflate compression is worth enabling for packages people share.
+- Entries are **deflated**. With the delta encodings (§7.3) that shrinks a package by about 61 %, and inflating costs well under 0.1 s in the browser (spike S2). The reader accepts stored entries too, since `ZipArchive` reads both with the same code.
 
 ### 7.2 `manifest.json`
 
@@ -397,7 +397,7 @@ All integers and floats are **little-endian**. Channel blocks start on 8-byte bo
 | 24 | 4 | f32 | Quantisation scale |
 | 28 | 4 | f32 | Quantisation origin X |
 | 32 | 4 | f32 | Quantisation origin Y |
-| 36 | 4 | u32 | Flags (bit 0: delta-encoded integer channels; reserved in 1.0) |
+| 36 | 4 | u32 | Flags (reserved, zero in 1.0) |
 | 40 | 4 | u32 | Directory offset |
 | 44 | 4 | u32 | Directory entry count |
 | 48 | 16 | — | Reserved (zero) |
@@ -408,21 +408,24 @@ All integers and floats are **little-endian**. Channel blocks start on 8-byte bo
 |---|---|---|
 | 2 | u16 | Driver number |
 | 2 | u16 | Channel ID: 1 = X, 2 = Y, 3 = Progress, 4 = Validity, 10 = Gap |
-| 2 | u16 | Encoding: 1 = Int16 quantised, 2 = Float32, 3 = Bitmap |
+| 2 | u16 | Encoding: 1 = Int16 quantised, 2 = Float32, 3 = Bitmap, 4 = Int32 units delta, 5 = Int16 quantised delta |
 | 2 | u16 | Reserved |
 | 4 | u32 | Block offset |
 | 4 | u32 | Block length (bytes) |
 
 **Encodings**
 
-- **Int16 quantised** (X, Y): `q = clamp(round((v − origin) / scale), −32767, 32767)` and `v = origin + q × scale`. `scale = max(rangeX, rangeY) / 65000`, which gives sub-decimetre precision for any circuit. Ranges come from exact min/max. Rounding uses `MidpointRounding.ToEven`. That makes rebuilds byte-identical on the same platform and SDK (NFR-11).
-- **Float32** (progress, gaps): IEEE 754 single precision. Gaps use `NaN` for "undefined". Progress in track units fits float32 comfortably: about 3,000,000 dm for a race, with roughly 0.25 dm resolution at the end.
+- **Int16 quantised:** `q = clamp(round((v − origin) / scale), −32767, 32767)` and `v = origin + q × scale`. `scale = max(rangeX, rangeY) / 65000`, which gives sub-decimetre precision for any circuit. Ranges come from exact min/max. Rounding uses `MidpointRounding.ToEven`. That makes rebuilds byte-identical on the same platform and SDK (NFR-11). X and Y use its delta form, below.
+- **Int16 quantised delta** (X, Y): the quantised values, each stored as the difference from the previous sample (the first as is), wrapping in 16 bits. The reader restores them with a running sum while it dequantises.
+- **Int32 units delta** (progress): progress rounded to whole track units (`MidpointRounding.ToEven`), each stored as the difference from the previous sample (the first as is). A 2-hour race reaches about 5,000,000 units, well within Int32. One unit (0.1 m) is finer than Float32 resolves at that size, and is 1.25 ms of gap at 80 m/s.
+- In both delta encodings, **invalid samples hold the last valid value**, so they encode as zero. Delta encoding is what makes the channels compress: gzip takes a 2-hour `positions.rrb` to 1.93 MB, against 3.97 MB without it (spike S2, [ADR-0004](adr/0004-custom-binary-bundle-format.md) addendum).
+- **Float32** (gaps): IEEE 754 single precision. Gaps use `NaN` for "undefined".
 - **Bitmap** (validity): bit *k* of the block is grid point *k*, LSB first.
 
 **Why structure-of-arrays.** Each channel is a contiguous primitive array. That gives the client:
 
-- **zero-copy views** via `MemoryMarshal.Cast<byte, short>` / `Cast<byte, float>`;
-- good compression, because neighbouring values are similar;
+- **zero-copy views** via `MemoryMarshal.Cast<byte, short>`, `Cast<byte, int>` and `Cast<byte, float>`, decoded in one pass;
+- good compression once delta-encoded, because neighbouring values are similar;
 - the option to add channels (for example tyre compound) without changing existing ones.
 
 ### 7.4 Size budget (2-hour race, 20 cars)
@@ -436,7 +439,7 @@ All integers and floats are **little-endian**. Channel blocks start on 8-byte bo
 | Manifest | ~1,000 centreline points + events | ~0.06 MB |
 | **Total** | | **≈ 5.3 MB** (NFR-04: ≤ 6 MB) |
 
-Over the wire, gzip should roughly halve this. Delta-encoding integer channels (flag bit 0, planned as schema 1.1) is expected to improve that further. Spike S2 measures both.
+Over the wire, spike S2 measured a 2-hour `positions.rrb` at 1.93 MB as GitHub Pages gzips it, thanks to the delta encodings (§7.3). Without them it would be 3.97 MB. Even with gaps uncompressed, a hosted replay stays under NFR-04's 3 MB.
 
 ### 7.5 Reading a bundle
 
@@ -458,7 +461,7 @@ public static class ReplayBundleReader
     public static ReplaySession Read(ReadOnlySpan<byte> manifestJson, ReadOnlySpan<byte> positions)
     {
         RrbHeader header = RrbHeader.Parse(positions, RrbKind.Positions);  // validates magic, version, bounds
-        // …directory lookup per driver/channel, bounds-checked, then dequantise each block once into a float[]
+        // …directory lookup per driver/channel, bounds-checked, then decode each block once into a float[] (running sums for the delta encodings, then dequantise)
         // owned by CarChannels (amortised at load; sampling stays branch-light).
     }
 }
@@ -499,15 +502,16 @@ The second entry only appears in hosted mode, where `mode` is `"hosted"`.
 
 ## 9. Compression and hosting (spike S2)
 
-This applies to bundles **served by the site**: demo races, and real races in hosted mode. Local packages are read from disk, where size matters much less. GitHub Pages serves static files. Spike S2 decides between these options by measuring transfer size, load time and code complexity:
+This applies to bundles **served by the site**: demo races, and real races in hosted mode. Local packages are read from disk, where size matters much less. GitHub Pages serves static files. Spike S2 compared these options on transfer size, load time and code complexity, for a 2-hour race's `positions.rrb`:
 
-| Option | How | Trade-off |
+| Option | How | Over the wire |
 |---|---|---|
-| **A. Raw files** | Publish `.rrb` as-is and rely on any transparent compression by the host | Simplest. S2 checks whether Pages compresses `application/octet-stream` responses. |
-| **B. Pre-gzipped files** | Publish `.rrb.gz`. The client decompresses with `GZipStream` in .NET (if supported in browser-wasm) or the browser's `DecompressionStream("gzip")` via a tiny JS helper. | Predictable size. Small decompression cost (~50 ms). |
-| **C. Delta + gzip** | As B, plus delta-encoded integer channels (schema 1.1) | Smallest. Slightly more reader code. |
+| **A. Raw files** | Publish `.rrb` with plain encodings. Pages gzips every response on the fly, much like zlib at level 5. | 3.97 MB |
+| **B. Pre-gzipped files** | Publish `.rrb.gz`. The client decompresses it with `GZipStream`, which works in browser-wasm (30–65 ms for a 2-hour race). | 3.92 MB |
+| **C. Delta + gzip** | As B, with the delta encodings (§7.3) | 1.77 MB |
+| **D. Delta, gzipped by Pages** | As A, with the delta encodings. The browser inflates the response; the reader only adds running sums (about 10 ms). | 1.93 MB |
 
-The default plan is **B**, upgraded to **C** if S2 shows a meaningful gain. S2 also confirms that `InputFile` and `ZipArchive` behave well in browser-wasm for 5–10 MB packages. Whatever S2 decides is recorded in ADR-0004 as an addendum.
+**Decision (spike S2): D.** A and B miss NFR-04's 3 MB. C is 8 % smaller than D but needs an inflate step in the client, short of the 15 % gain set as the bar. The reasoning and numbers are in [S2](spikes/S2.md#decisions) and the [ADR-0004](adr/0004-custom-binary-bundle-format.md) addendum. S2 also confirmed that `InputFile` and `ZipArchive` work in browser-wasm for 5–10 MB packages ([05 §9.2](05-web-client.md#92-from-the-users-disk-localpackagereplaysource-real-races)).
 
 ## 10. Versioning and compatibility
 

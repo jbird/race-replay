@@ -139,10 +139,11 @@ Tests use both.
 | Builder | Shape | Typical assertions |
 |---|---|---|
 | `SyntheticTrack.Circle(radiusMetres)` | Circle | Lap length = 2πr ± 0.5 % |
-| `SyntheticTrack.Stadium(straight, radius)` | Two straights + two semicircles | Start/finish placement, uniform resampling |
+| `SyntheticTrack.Stadium(straight, radius)` | Two straights + two semicircles; progress 0 halfway along a straight | Start/finish placement, uniform resampling |
+| `.Clockwise()` / `.Rotated(degrees)` | Any track driven the other way, or turned about its centre | Direction of travel, display rotation |
 | `SyntheticTrack.FigureEight(size)` | Self-crossing loop | Projection never jumps branch at the crossing |
 | `SyntheticTrack.WithParallelPitLane(offsetMetres)` | Stadium plus a parallel pit path | Pit tolerance; no backwards snaps |
-| `SyntheticCar.ConstantSpeed(track, speed, startProgress)` | Uniform motion, sampled at about 3.7 Hz. `.WithTimestampJitter(sd, max, seed)` shifts timestamps but not positions, as OpenF1's do (S1). | Gaps, ordering, laps |
+| `SyntheticCar.ConstantSpeed(track, speed, startProgress)` | Uniform motion, sampled at about 3.7 Hz. `.WithTimestampJitter(sd, max, seed)` shifts timestamps but not positions, as OpenF1's do (S1). `.WithLateralOffset(metres)` drives a parallel line, like another racing line. `.Laps(firstLap)` gives lap records at the true line crossings. | Gaps, ordering, laps, centreline |
 | `.WithDropout(from, to)` / `.WithSpike(at)` / `.WithZeroPlaceholder(at)` / `.WithDuplicate(at)` / `.WithOutOfOrder(at)` / `.Retires(at)` / `.PitStop(at, duration)` | Fault injection | Cleaning, validity, events |
 | `.WithSnapAhead(at, metres)` | One sample placed on a parallel section of track further round the lap. It is plausible as a position, so the cleaner keeps it, but wrong as progress. | Re-acquisition rule, plausibility gate, envelope speed limit |
 | `SyntheticSession.Race()` | Composes cars into `RawSessionData` with analytic laps, results and race control | End-to-end build tests |

@@ -192,38 +192,50 @@ All `Time` values are **seconds since `ReplayTimeline.T0Utc`**. Absolute timesta
 
 ### 5.1 Reference laps
 
-A good centreline comes from clean, representative laps. `CentrelineBuilder` selects up to `ReferenceLapCount` (default 5) laps, taken from different drivers where possible, that satisfy all of:
+A good centreline comes from clean, representative laps. `CentrelineBuilder` takes the session's laps and race control, and each car's cleaned runs from §4. A lap is a **candidate** when all of these hold:
 
-- not lap 1, not a pit-out lap, and not an in-lap (the next lap is a pit-out lap);
-- `Duration` within 107 % of the median green-flag lap time;
-- no overlap with safety car, virtual safety car or red-flag windows;
-- location samples cover the lap with no split.
+- it isn't lap 1, a pit-out lap or an in-lap (the driver's next lap is a pit-out lap);
+- it has a `Start` and a positive `Duration`;
+- it doesn't overlap a **neutralised period**, ends included. The periods come from race control in spike S1's wording, matched on the whole message (ignoring case), so a VSC is never read as an SC ([S1](spikes/S1.md#race_control-wording)):
+  - safety car: `SAFETY CAR DEPLOYED` to `SAFETY CAR IN THIS LAP`, so the lap the safety car comes in on is excluded;
+  - virtual safety car: `VIRTUAL SAFETY CAR DEPLOYED` to `VIRTUAL SAFETY CAR ENDING`;
+  - red flag: `SESSION ABORTED` to the next `SESSION STARTED`.
 
-The fastest qualifying laps are preferred.
+  A period that never closes runs to the end of the session.
+- its `Duration` is at most `MaxLapTimeRatio` (107 %) of the median of the **green-flag laps**, meaning those that pass the rules above;
+- it lies inside one cleaned run, which has samples at or before `Start` and at or after the lap's end;
+- it has at least `MinReferencePoints` distinct positions.
+
+Up to `ReferenceLapCount` (default 5) candidates are chosen, fastest first. Each driver with a candidate gets one before anyone gets a second. Ties go to the lower driver number, then the lower lap number. With fewer candidates the builder uses those there are; with none it fails, saying how many laps each rule excluded.
 
 ### 5.2 Building the polyline
 
 ```text
 for each reference lap:
-    P  ← samples in [lap.Start, lap.Start + lap.Duration]
-    P' ← resample P uniformly by arc length into M points   (M = ⌈length / Spacing⌉, Spacing = 5 m)
-base ← first reference lap
+    P  ← position at lap.Start, samples inside the lap, position at lap.Start + lap.Duration (ends interpolated)
+discard laps whose closed length differs from the median by more than MaxLapLengthDeviation (2 %)
+base ← fastest kept lap
+for each kept lap:
+    P' ← resample P uniformly by arc length into M points   (M = ⌈base length / Spacing⌉, Spacing = 5 m)
 for each other lap Q:
     k* ← argmin_k Σ |base[i] − Q[(i + k) mod M]|²            (circular alignment, O(M²); M ≈ 1000)
     Q  ← Q rotated by k*
 C  ← point-wise mean of aligned laps
-C  ← circular moving average, window W = 5                     (removes residual jitter)
-C  ← resample by arc length to final spacing; close the loop
+C  ← circular moving average, window W = 5                     (removes residual jitter; wraps across point 0)
+s₀ ← start/finish on C (§5.3)
+C  ← resample by arc length from s₀ into ⌈length / Spacing⌉ points; the loop closes back to point 0
 L  ← total arc length; cumulative[i] = arc length to point i
 ```
 
-Because the laps are resampled to the same point count before averaging, they also need the same arc length. Each lap is normalised to the base lap's length before alignment. Laps whose length differs from the median by more than 2 % are discarded.
+Because the laps are resampled to the same point count before averaging, each is in effect normalised to the base lap's length: point *i* sits the same fraction of the way round every lap. The length check runs first, against the median of the chosen laps (the lower middle one for an even count, so one lap always survives). Discarded laps are not replaced.
+
+The builder reports what it did for the build report: laps checked and how many each rule excluded, the reference laps used (driver, lap, duration and length), the laps the length check discarded, the number of lap starts behind point 0 with their spread (median distance from it, round the loop), and L in metres.
 
 ### 5.3 Start/finish and orientation
 
-- **Start/finish (s = 0).** Lap `date_start` values are documented as approximate. The builder therefore collects every car's projected *s* at every lap boundary in the session and takes the circular median. The centreline is then rotated so that this point is index 0.
+- **Start/finish (s = 0).** Lap `date_start` values are documented as approximate. The builder therefore collects every car's position at the start of every lap from lap 2 on, interpolated inside a cleaned run, and projects each onto the smoothed loop with a plain nearest-segment search. Lap 1 is left out because the grid sits behind the line (§10). Point 0 goes at the **circular median** of those *s* values: they are unwrapped around their circular mean, and the ordinary median is taken. A minority of starts anywhere else on the lap can't move it far, and starts either side of the loop's seam don't drag it halfway round. The final resampling starts exactly there, so point 0 is the median itself, not the nearest point to it.
 - **Direction.** *s* increases in the direction of travel by construction.
-- **Display rotation.** The default is a PCA-based rotation that lays the circuit out "landscape". A small checked-in override file, `config/track-orientation.json` keyed by OpenF1 `circuit_key`, allows broadcast-style orientation. The meetings endpoint also links to third-party circuit info that includes a rotation, but its licensing is unclear, so it is not used by default.
+- **Display rotation.** The default turns the centreline's principal axis (PCA) horizontal, laying the circuit out "landscape". It lies in (−90°, 90°], positive anticlockwise as the map draws it. A shape with no clear long axis, whose principal variances are within 1 % of each other, gets 0. A small checked-in override file, `config/track-orientation.json` keyed by OpenF1 `circuit_key`, allows broadcast-style orientation (RR-042). The meetings endpoint also links to third-party circuit info that includes a rotation, but its licensing is unclear, so it is not used by default.
 
 ### 5.4 Spatial index
 
@@ -413,8 +425,9 @@ All parameters live in options records bound from configuration and validated at
 | `MaxGap` | 2.0 s | Cleaner, resampler | Never interpolate across larger gaps. S1: no gaps over 2 s while a car runs; Δt p99.9 ≈ 1.05 s |
 | `ReferenceLapCount` | 5 | Centreline | Fewer if not enough clean laps |
 | `CentrelineSpacing` | 5 m | Centreline | About 1,000 points for a 5 km lap |
-| `SmoothingWindow` | 5 points | Centreline | Circular moving average |
+| `SmoothingWindow` | 5 points | Centreline | Circular moving average; odd, and 1 turns it off |
 | `MaxLapLengthDeviation` | 2 % | Centreline | Discards odd reference laps |
+| `MaxLapTimeRatio` | 107 % | Centreline | Of the median green-flag lap time; slower laps aren't references |
 | `ProjectionBack` | 3 segments | Projector | Jitter tolerance |
 | `MaxLateralError` | 40 m | Projector | Flag and trigger a global search |
 | `ReacquireConfirmSamples` | 3 | Projector | Consecutive consistent samples before a discontinuous global-search result is accepted |

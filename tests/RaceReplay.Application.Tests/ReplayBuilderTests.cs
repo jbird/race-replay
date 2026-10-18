@@ -148,7 +148,10 @@ public sealed class ReplayBuilderTests
     private static ReplaySession Build(RawSessionData raw)
     {
         ReplayBuilder builder = new(
-            new CentrelineBuilder(new CentrelineOptions()), new TimelineResampler(new ResamplingOptions()), new FakeTimeProvider(s_now));
+            new LocationCleaner(new CleaningOptions()),
+            new CentrelineBuilder(new CentrelineOptions()),
+            new TimelineResampler(new ResamplingOptions()),
+            new FakeTimeProvider(s_now));
         return builder.Build(raw, new BuildOptions("race-replay test")).Replay;
     }
 

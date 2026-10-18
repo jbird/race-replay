@@ -10,10 +10,11 @@ public sealed record BuildOptions(string Builder);
 public sealed record BuildResult(ReplaySession Replay);
 
 /// <summary>
-/// Turns raw session data into a replay (docs/02 §7). Deliberately free of I/O. v0 outlines the track from a
-/// reference lap and resamples positions onto the timeline; progress, gaps, events and validators arrive in M2–M3.
+/// Turns raw session data into a replay (docs/02 §7). Deliberately free of I/O. It outlines the track from the
+/// cleaned positions of several reference laps and resamples raw positions onto the timeline; cleaned positions,
+/// progress, gaps, events and validators arrive with <c>SessionAnalyzer</c> and M3.
 /// </summary>
-public sealed class ReplayBuilder(CentrelineBuilder centreline, TimelineResampler resampler, TimeProvider time)
+public sealed class ReplayBuilder(LocationCleaner cleaner, CentrelineBuilder centreline, TimelineResampler resampler, TimeProvider time)
 {
     /// <exception cref="InsufficientDataException">The data can't support a replay.</exception>
     public BuildResult Build(RawSessionData raw, BuildOptions options)
@@ -25,7 +26,8 @@ public sealed class ReplayBuilder(CentrelineBuilder centreline, TimelineResample
             throw new InsufficientDataException("The session has no drivers.");
         }
 
-        TrackModel track = centreline.Build(raw);
+        Dictionary<DriverNumber, CleanedTrace> traces = raw.Locations.ToDictionary(p => p.Key, p => cleaner.Clean(p.Key, p.Value));
+        TrackModel track = centreline.Build(raw, traces).Track;
         (DateTimeOffset t0, int sampleCount) = resampler.Grid(raw.Locations.Values);
         double duration = (sampleCount - 1) / resampler.TimelineHz;
 

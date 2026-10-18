@@ -111,6 +111,8 @@ public static class CliServices
 
         services.AddSingleton(new ResamplingOptions());
         services.AddSingleton<TimelineResampler>();
+        services.AddSingleton(new CleaningOptions());
+        services.AddSingleton<LocationCleaner>();
         services.AddSingleton(new CentrelineOptions());
         services.AddSingleton<CentrelineBuilder>();
         services.AddSingleton<ReplayBuilder>();

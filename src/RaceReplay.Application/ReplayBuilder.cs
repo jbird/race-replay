@@ -10,13 +10,15 @@ public sealed record BuildOptions(string Builder);
 public sealed record BuildResult(ReplaySession Replay);
 
 /// <summary>
-/// Turns raw session data into a replay (docs/02 §7). Deliberately free of I/O. It outlines the track from the
-/// cleaned positions of several reference laps and resamples raw positions onto the timeline; cleaned positions,
-/// progress, gaps, events and validators arrive with <c>SessionAnalyzer</c> and M3.
+/// Turns raw session data into a replay (docs/02 §7). Deliberately free of I/O. It cleans each car's positions
+/// (docs/03 §4), outlines the track from several reference laps and resamples the cleaned positions onto the
+/// timeline; progress, gaps, events and validators arrive with <c>SessionAnalyzer</c> and M3.
 /// </summary>
 public sealed class ReplayBuilder(LocationCleaner cleaner, CentrelineBuilder centreline, TimelineResampler resampler, TimeProvider time)
 {
-    /// <exception cref="InsufficientDataException">The data can't support a replay.</exception>
+    /// <exception cref="InsufficientDataException">
+    /// The data can't support a replay, including location samples filed under the wrong driver.
+    /// </exception>
     public BuildResult Build(RawSessionData raw, BuildOptions options)
     {
         ArgumentNullException.ThrowIfNull(raw);
@@ -26,15 +28,16 @@ public sealed class ReplayBuilder(LocationCleaner cleaner, CentrelineBuilder cen
             throw new InsufficientDataException("The session has no drivers.");
         }
 
-        Dictionary<DriverNumber, CleanedTrace> traces = raw.Locations.ToDictionary(p => p.Key, p => cleaner.Clean(p.Key, p.Value));
+        Dictionary<DriverNumber, CleanedTrace> traces = Clean(raw.Locations);
         TrackModel track = centreline.Build(raw, traces).Track;
         (DateTimeOffset t0, int sampleCount) = resampler.Grid(raw.Locations.Values);
         double duration = (sampleCount - 1) / resampler.TimelineHz;
 
         CarChannels[] cars =
         [
-            .. raw.Drivers.Select(d => resampler.Resample(
-                d.Number, raw.Locations.TryGetValue(d.Number, out IReadOnlyList<RawLocationSample>? samples) ? samples : [], t0, sampleCount)),
+            .. raw.Drivers.Select(d => traces.TryGetValue(d.Number, out CleanedTrace? trace)
+                ? resampler.Resample(trace, t0, sampleCount)
+                : resampler.Resample(d.Number, [], t0, sampleCount)),
         ];
 
         double raceStart = Math.Clamp(Seconds(RaceStartUtc(raw) ?? t0, t0), 0, duration);
@@ -47,6 +50,24 @@ public sealed class ReplayBuilder(LocationCleaner cleaner, CentrelineBuilder cen
             : Provenance.ForOpenF1(time.GetUtcNow(), options.Builder);
 
         return new BuildResult(new ReplaySession(raw.Session, raw.Drivers, track, timeline, cars, GapSeries.Empty, [], provenance));
+    }
+
+    // Every car's samples cleaned into runs. A sample filed under another driver breaks the provider contract, so it's
+    // a data error the CLI reports, not a crash.
+    private Dictionary<DriverNumber, CleanedTrace> Clean(IReadOnlyDictionary<DriverNumber, IReadOnlyList<RawLocationSample>> locations)
+    {
+        foreach ((DriverNumber driver, IReadOnlyList<RawLocationSample> samples) in locations)
+        {
+            foreach (RawLocationSample sample in samples)
+            {
+                if (sample.Driver != driver)
+                {
+                    throw new InsufficientDataException($"The location samples for driver {driver} include one from driver {sample.Driver}.");
+                }
+            }
+        }
+
+        return locations.ToDictionary(p => p.Key, p => cleaner.Clean(p.Key, p.Value));
     }
 
     // Lap 1 starts with the race (docs/03 §6.3).

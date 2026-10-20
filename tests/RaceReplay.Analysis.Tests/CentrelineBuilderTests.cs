@@ -177,6 +177,23 @@ public sealed class CentrelineBuilderTests
     }
 
     [Fact]
+    public void Build_NearlyRoundShapes_RotationFadesInWithTheLongAxis()
+    {
+        // Stadiums turned 30°, from round to clearly long: the rotation grows steadily from 0 to the full −30°
+        // instead of jumping, because a nearly round shape's axis is unreliable.
+        double[] straights = [0, 4, 8, 12, 16, 400];
+        float[] rotations = [.. straights.Select(s => Build(Race(Numbered(Car(SyntheticTrack.Stadium(s, Bend).Rotated(30), 60, laps: 3)))).Track.DisplayRotationDegrees)];
+
+        Assert.Equal(0, rotations[0]);
+        Assert.Equal(-30, rotations[^1], 1.0);
+        Assert.Contains(rotations, r => r is < -1 and > -29); // part-way somewhere on the ramp
+        for (int i = 1; i < rotations.Length; i++)
+        {
+            Assert.True(rotations[i] <= rotations[i - 1] + 0.5f, $"straights {straights[i]} m turn less than {straights[i - 1]} m");
+        }
+    }
+
+    [Fact]
     public void Build_Circle_HasNoLongAxis_NoRotation()
     {
         Assert.Equal(0, Build(Race(Numbered(Car(s_circle.Rotated(40), 60, laps: 3)))).Track.DisplayRotationDegrees);

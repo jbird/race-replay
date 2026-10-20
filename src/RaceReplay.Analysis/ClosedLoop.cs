@@ -1,77 +1,44 @@
+using RaceReplay.Domain;
+
 namespace RaceReplay.Analysis;
 
-/// <summary>A point in track units, in double precision for the geometry.</summary>
+/// <summary>A point in track units, in double precision for the averaging.</summary>
 internal readonly record struct PlanePoint(double X, double Y)
 {
-    public static double DistanceSquared(PlanePoint a, PlanePoint b) => Square(b.X - a.X) + Square(b.Y - a.Y);
+    public static PlanePoint Of(TrackPoint p) => new(p.X, p.Y);
 
-    public static double Distance(PlanePoint a, PlanePoint b) => Math.Sqrt(DistanceSquared(a, b));
+    public static double DistanceSquared(PlanePoint a, PlanePoint b) => Square(b.X - a.X) + Square(b.Y - a.Y);
 
     private static double Square(double v) => v * v;
 }
 
 /// <summary>
-/// Geometry on a closed polyline: the last point joins back to the first. Arc length <c>s</c> runs from point 0.
+/// Geometry on closed loops for the centreline (docs/03 §5.2): alignment, smoothing and a full-search projection.
+/// Arc lengths come from <see cref="TrackModel"/>.
 /// </summary>
 internal static class ClosedLoop
 {
-    /// <summary>cumulative[i] is the arc length to point i; the extra last entry closes the loop and is its length.</summary>
-    public static double[] Cumulative(ReadOnlySpan<PlanePoint> points)
+    /// <summary><paramref name="count"/> points evenly spaced by arc length round the loop, the first at <paramref name="startAt"/>.</summary>
+    public static PlanePoint[] Resample(TrackModel loop, int count, double startAt = 0)
     {
-        double[] cumulative = new double[points.Length + 1];
-        for (int i = 0; i < points.Length; i++)
-        {
-            cumulative[i + 1] = cumulative[i] + PlanePoint.Distance(points[i], points[(i + 1) % points.Length]);
-        }
-
-        return cumulative;
-    }
-
-    /// <summary><paramref name="count"/> points evenly spaced by arc length, the first at <paramref name="startAt"/>.</summary>
-    public static PlanePoint[] Resample(ReadOnlySpan<PlanePoint> points, double[] cumulative, int count, double startAt = 0)
-    {
-        double length = cumulative[^1];
         PlanePoint[] resampled = new PlanePoint[count];
         for (int j = 0; j < count; j++)
         {
-            resampled[j] = PointAt(points, cumulative, startAt + (j * length / count));
+            resampled[j] = PlanePoint.Of(loop.PointAt(startAt + (j * loop.LapLength / count)));
         }
 
         return resampled;
     }
 
-    /// <summary>The point at arc length <paramref name="s"/>, wrapped onto the loop.</summary>
-    public static PlanePoint PointAt(ReadOnlySpan<PlanePoint> points, double[] cumulative, double s)
-    {
-        double length = cumulative[^1];
-        double wrapped = s % length;
-        if (wrapped < 0)
-        {
-            wrapped += length;
-        }
-
-        int segment = Array.BinarySearch(cumulative, wrapped);
-        if (segment < 0)
-        {
-            segment = ~segment - 1;
-        }
-
-        segment = Math.Clamp(segment, 0, points.Length - 1);
-        double span = cumulative[segment + 1] - cumulative[segment];
-        double t = span > 0 ? (wrapped - cumulative[segment]) / span : 0;
-        PlanePoint a = points[segment];
-        PlanePoint b = points[(segment + 1) % points.Length];
-        return new PlanePoint(a.X + ((b.X - a.X) * t), a.Y + ((b.Y - a.Y) * t));
-    }
-
     /// <summary>The arc length of the closest point on the loop to <paramref name="p"/> (docs/03 §6.1), by a full search.</summary>
-    public static double Project(ReadOnlySpan<PlanePoint> points, double[] cumulative, PlanePoint p)
+    public static double Project(TrackModel loop, PlanePoint p)
     {
+        ReadOnlySpan<TrackPoint> points = loop.Centreline.Span;
         double best = double.PositiveInfinity, bestS = 0;
         for (int i = 0; i < points.Length; i++)
         {
-            PlanePoint a = points[i];
-            PlanePoint b = points[(i + 1) % points.Length];
+            PlanePoint a = PlanePoint.Of(points[i]);
+            PlanePoint b = PlanePoint.Of(points[(i + 1) % points.Length]);
             double abx = b.X - a.X, aby = b.Y - a.Y;
             double span2 = (abx * abx) + (aby * aby);
             double t = span2 > 0 ? Math.Clamp((((p.X - a.X) * abx) + ((p.Y - a.Y) * aby)) / span2, 0, 1) : 0;
@@ -79,7 +46,7 @@ internal static class ClosedLoop
             if (d2 < best)
             {
                 best = d2;
-                bestS = cumulative[i] + (t * (cumulative[i + 1] - cumulative[i]));
+                bestS = loop.ArcLengthAt(i) + (t * (loop.ArcLengthAt(i + 1) - loop.ArcLengthAt(i)));
             }
         }
 

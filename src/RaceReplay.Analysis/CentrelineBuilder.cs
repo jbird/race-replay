@@ -34,16 +34,16 @@ public sealed record ReferenceLap(DriverNumber Driver, int LapNumber, double Dur
 
 /// <summary>How many laps each reference-lap rule excluded (docs/03 §5.1). A lap counts under the first rule it fails.</summary>
 /// <param name="LapOne">Lap 1, which starts on the grid.</param>
-/// <param name="PitInOrOut">Pit-out laps, and in-laps: those followed by a pit-out lap.</param>
+/// <param name="PitInOrOut">
+/// Pit-out laps; in-laps, which are followed by a pit-out lap or hold some of a pit stop's time in the pit lane; and
+/// the last lap of a driver who didn't finish, who may have retired into the pits.
+/// </param>
 /// <param name="NoTiming">Laps without a start or a positive duration.</param>
 /// <param name="Neutralised">Laps overlapping a safety car, virtual safety car or red-flag period.</param>
 /// <param name="TooSlow">Laps over <see cref="CentrelineOptions.MaxLapTimeRatio"/> × the median green-flag lap.</param>
 /// <param name="NotCovered">Laps no single cleaned run of positions covers.</param>
 /// <param name="TooFewPositions">Laps with fewer than <see cref="CentrelineOptions.MinReferencePoints"/> distinct positions.</param>
-public sealed record LapExclusions(int LapOne, int PitInOrOut, int NoTiming, int Neutralised, int TooSlow, int NotCovered, int TooFewPositions)
-{
-    public int Total => LapOne + PitInOrOut + NoTiming + Neutralised + TooSlow + NotCovered + TooFewPositions;
-}
+public sealed record LapExclusions(int LapOne, int PitInOrOut, int NoTiming, int Neutralised, int TooSlow, int NotCovered, int TooFewPositions);
 
 /// <summary>What building the centreline did, for the build report (docs/03 §5).</summary>
 /// <param name="LapsChecked">Lap records in the session.</param>
@@ -71,6 +71,10 @@ public sealed record CentrelineResult(TrackModel Track, CentrelineDiagnostics Di
 /// </summary>
 public sealed class CentrelineBuilder
 {
+    // The display rotation fades in as the shape's anisotropy, (λ₁ − λ₂) / λ₁, grows between these (docs/03 §5.3).
+    private const double NoLongAxisBelow = 0.01;
+    private const double FullRotationFrom = 0.10;
+
     private readonly CentrelineOptions _options;
     private readonly double _spacing; // track units
 
@@ -94,7 +98,7 @@ public sealed class CentrelineBuilder
         _spacing = options.SpacingMetres * options.UnitsPerMetre;
     }
 
-    /// <summary>Builds the centreline from the session's laps and race control, and each car's cleaned positions.</summary>
+    /// <summary>Builds the centreline from the session's laps, pit stops, results and race control, and each car's cleaned positions.</summary>
     /// <exception cref="InsufficientDataException">No lap qualifies as a reference.</exception>
     public CentrelineResult Build(RawSessionData raw, IReadOnlyDictionary<DriverNumber, CleanedTrace> traces)
     {
@@ -107,21 +111,24 @@ public sealed class CentrelineBuilder
             throw new InsufficientDataException(NoReferenceMessage(raw.Laps.Count, excluded));
         }
 
-        // §5.1: up to ReferenceLapCount, fastest first, then the length check against the median.
-        List<Candidate> chosen = Choose(candidates);
-        double medianLength = chosen.Select(c => c.Length).Order().ElementAt((chosen.Count - 1) / 2); // the lower middle: one lap always survives
-        List<Candidate> kept = [.. chosen.Where(c => Math.Abs(c.Length - medianLength) <= _options.MaxLapLengthDeviation * medianLength)];
-        List<Candidate> discarded = [.. chosen.Except(kept)];
+        // §5.1: up to ReferenceLapCount, fastest first, then the length check against the median. Only the chosen
+        // laps' positions are ever gathered.
+        LapLoop[] chosen = [.. Choose(candidates).Select(c => new LapLoop(c.Lap, Loop(c)))];
+        double medianLength = chosen.Select(c => c.Loop.LapLength).Order().ElementAt((chosen.Length - 1) / 2); // the lower middle: one lap always survives
+        List<LapLoop> kept = [], discarded = [];
+        foreach (LapLoop lap in chosen)
+        {
+            (Math.Abs(lap.Loop.LapLength - medianLength) <= _options.MaxLapLengthDeviation * medianLength ? kept : discarded).Add(lap);
+        }
 
         // §5.2: resample each lap into M points by its own arc length, align to the base, average, smooth.
-        int m = Math.Max(3, (int)Math.Ceiling(kept[0].Length / _spacing));
-        PlanePoint[] baseLap = Resample(kept[0].Positions, m);
+        int m = Math.Max(3, (int)Math.Ceiling(kept[0].Loop.LapLength / _spacing));
+        PlanePoint[] baseLap = ClosedLoop.Resample(kept[0].Loop, m);
         double[] sumX = new double[m], sumY = new double[m];
-        foreach (Candidate lap in kept)
+        for (int k = 0; k < kept.Count; k++)
         {
-            bool isBase = ReferenceEquals(lap, kept[0]);
-            PlanePoint[] points = isBase ? baseLap : Resample(lap.Positions, m);
-            int shift = isBase ? 0 : ClosedLoop.BestShift(baseLap, points);
+            PlanePoint[] points = k == 0 ? baseLap : ClosedLoop.Resample(kept[k].Loop, m);
+            int shift = k == 0 ? 0 : ClosedLoop.BestShift(baseLap, points);
             for (int i = 0; i < m; i++)
             {
                 PlanePoint p = points[(i + shift) % m];
@@ -132,16 +139,13 @@ public sealed class CentrelineBuilder
 
         PlanePoint[] mean = [.. Enumerable.Range(0, m).Select(i => new PlanePoint(sumX[i] / kept.Count, sumY[i] / kept.Count))];
         PlanePoint[] smoothed = _options.SmoothingWindow > 1 ? ClosedLoop.Smooth(mean, _options.SmoothingWindow) : mean;
-        double[] cumulative = ClosedLoop.Cumulative(smoothed);
-        double length = cumulative[^1];
+        TrackModel loop = new(smoothed.Select(Point).ToArray(), _options.UnitsPerMetre);
 
         // §5.3: point 0 at the circular median of every car's lap starts, then the final resampling from there.
-        List<double> boundaries = Boundaries(raw, traces, smoothed, cumulative);
-        (double startFinish, double spread) = CircularMedian(boundaries, length);
-        PlanePoint[] centreline = ClosedLoop.Resample(smoothed, cumulative, Math.Max(3, (int)Math.Ceiling(length / _spacing)), startFinish);
-
-        TrackPoint[] outline = [.. centreline.Select(p => new TrackPoint((float)p.X, (float)p.Y))];
-        TrackModel track = new(outline, _options.UnitsPerMetre, LandscapeRotation(centreline));
+        List<double> boundaries = Boundaries(raw, traces, loop);
+        (double startFinish, double spread) = CircularMedian(boundaries, loop.LapLength);
+        TrackPoint[] outline = [.. ClosedLoop.Resample(loop, Math.Max(3, (int)Math.Ceiling(loop.LapLength / _spacing)), startFinish).Select(Point)];
+        TrackModel track = new(outline, _options.UnitsPerMetre, LandscapeRotation(outline));
         CentrelineDiagnostics diagnostics = new(
             raw.Laps.Count,
             excluded,
@@ -153,11 +157,16 @@ public sealed class CentrelineBuilder
         return new CentrelineResult(track, diagnostics);
     }
 
-    // Every lap passing the rules of docs/03 §5.1, with its positions, and how many each rule excluded.
+    // Every lap passing the rules of docs/03 §5.1, with the run that covers it, and how many each rule excluded.
     private (List<Candidate> Candidates, LapExclusions Excluded) Candidates(RawSessionData raw, IReadOnlyDictionary<DriverNumber, CleanedTrace> traces)
     {
         HashSet<(DriverNumber, int)> pitOut = [.. raw.Laps.Where(l => l.IsPitOutLap).Select(l => (l.Driver, l.LapNumber))];
-        IReadOnlyList<TimeWindow> neutralised = NeutralisedPeriods.From(raw.RaceControl);
+        ILookup<DriverNumber, TimeWindow> pitLane = raw.PitStops.ToLookup(
+            p => p.Driver,
+            p => new TimeWindow(p.LaneDuration is double lane && lane > 0 && double.IsFinite(lane) ? After(p.Timestamp, -lane) : p.Timestamp, p.Timestamp));
+        HashSet<(DriverNumber, int)> retirements = [.. raw.Results.Where(r => r.Dnf)
+            .Select(r => (r.Driver, raw.Laps.Where(l => l.Driver == r.Driver).Select(l => l.LapNumber).DefaultIfEmpty().Max()))];
+        IReadOnlyList<TimeWindow> neutralised = NeutralisedPeriods.From(raw.RaceControl, raw.Laps);
         int lapOne = 0, pit = 0, noTiming = 0, periods = 0, slow = 0, notCovered = 0, fewPositions = 0;
 
         List<(RawLap Lap, DateTimeOffset Start, DateTimeOffset End)> green = [];
@@ -167,13 +176,17 @@ public sealed class CentrelineBuilder
             {
                 lapOne++;
             }
-            else if (lap.IsPitOutLap || pitOut.Contains((lap.Driver, lap.LapNumber + 1)))
+            else if (lap.IsPitOutLap || pitOut.Contains((lap.Driver, lap.LapNumber + 1)) || retirements.Contains((lap.Driver, lap.LapNumber)))
             {
                 pit++;
             }
             else if (lap.Start is not DateTimeOffset start || lap.Duration is not double duration || !(duration > 0) || !double.IsFinite(duration))
             {
                 noTiming++;
+            }
+            else if (pitLane[lap.Driver].Any(p => p.Overlaps(start, After(start, duration))))
+            {
+                pit++; // an in-lap the next lap's pit-out flag didn't reveal
             }
             else if (neutralised.Any(p => p.Overlaps(start, After(start, duration))))
             {
@@ -203,19 +216,19 @@ public sealed class CentrelineBuilder
             }
             else
             {
-                PlanePoint[] positions = LapPositions(run, start, end);
-                candidates.Add(new Candidate(lap, positions, ClosedLoop.Cumulative(positions)[^1]));
+                candidates.Add(new Candidate(lap, run, start, end));
             }
         }
 
         return (candidates, new LapExclusions(lapOne, pit, noTiming, periods, slow, notCovered, fewPositions));
     }
 
-    // Fastest first, one lap per driver before anyone gets a second; ties to the lower driver number, then lap number.
-    private List<Candidate> Choose(List<Candidate> candidates)
+    // Fastest first, one lap per driver before anyone gets a second. Ties go to the lower driver number, then lap
+    // number, then the earlier start, so even duplicate lap records are chosen whatever their order.
+    private IEnumerable<Candidate> Choose(List<Candidate> candidates)
     {
-        Candidate[] ranked = [.. candidates.OrderBy(c => c.Lap.Duration).ThenBy(c => c.Lap.Driver.Value).ThenBy(c => c.Lap.LapNumber)];
-        List<Candidate> chosen = [];
+        Candidate[] ranked = [.. candidates.OrderBy(c => c.Lap.Duration).ThenBy(c => c.Lap.Driver.Value).ThenBy(c => c.Lap.LapNumber).ThenBy(c => c.Start)];
+        HashSet<Candidate> chosen = new(ReferenceEqualityComparer.Instance);
         HashSet<DriverNumber> drivers = [];
         foreach (Candidate c in ranked)
         {
@@ -227,18 +240,18 @@ public sealed class CentrelineBuilder
 
         foreach (Candidate c in ranked)
         {
-            if (chosen.Count < _options.ReferenceLapCount && !chosen.Contains(c))
+            if (chosen.Count < _options.ReferenceLapCount)
             {
                 chosen.Add(c);
             }
         }
 
-        return [.. chosen.OrderBy(c => Array.IndexOf(ranked, c))];
+        return ranked.Where(chosen.Contains);
     }
 
     // Each car's position at the start of every lap from lap 2, projected onto the loop. Lap 1 starts on the grid,
     // behind the line (docs/03 §10). Drivers in number order, so the result doesn't depend on the dictionary's order.
-    private static List<double> Boundaries(RawSessionData raw, IReadOnlyDictionary<DriverNumber, CleanedTrace> traces, PlanePoint[] loop, double[] cumulative)
+    private static List<double> Boundaries(RawSessionData raw, IReadOnlyDictionary<DriverNumber, CleanedTrace> traces, TrackModel loop)
     {
         List<double> boundaries = [];
         foreach (IGrouping<DriverNumber, RawLap> laps in raw.Laps.Where(l => l.LapNumber >= 2 && l.Start is not null).GroupBy(l => l.Driver).OrderBy(g => g.Key.Value))
@@ -252,7 +265,7 @@ public sealed class CentrelineBuilder
             {
                 if (RunCovering(trace, lap.Start!.Value, lap.Start.Value) is { } run)
                 {
-                    boundaries.Add(ClosedLoop.Project(loop, cumulative, PositionAt(run, lap.Start.Value)));
+                    boundaries.Add(ClosedLoop.Project(loop, PositionAt(run, lap.Start.Value)));
                 }
             }
         }
@@ -285,13 +298,13 @@ public sealed class CentrelineBuilder
         return (median < 0 ? median + length : median, spread);
     }
 
-    // The rotation, in degrees anticlockwise and in (−90, 90], that turns the principal axis horizontal. A shape with
-    // no clear long axis (principal variances within 1 %) stays as it is.
-    private static float LandscapeRotation(PlanePoint[] points)
+    // The rotation, in degrees anticlockwise and in (−90, 90], that turns the principal axis horizontal. A nearly round
+    // shape has no reliable axis, so the rotation fades in with the anisotropy instead of jumping at a threshold.
+    private static float LandscapeRotation(TrackPoint[] points)
     {
-        double mx = points.Average(p => p.X), my = points.Average(p => p.Y);
+        double mx = points.Average(p => (double)p.X), my = points.Average(p => (double)p.Y);
         double sxx = 0, syy = 0, sxy = 0;
-        foreach (PlanePoint p in points)
+        foreach (TrackPoint p in points)
         {
             sxx += (p.X - mx) * (p.X - mx);
             syy += (p.Y - my) * (p.Y - my);
@@ -300,34 +313,32 @@ public sealed class CentrelineBuilder
 
         double half = (sxx - syy) / 2, r = Math.Sqrt((half * half) + (sxy * sxy));
         double major = ((sxx + syy) / 2) + r;
-        if (2 * r <= 0.01 * major)
+        double weight = major > 0 ? Math.Clamp(((2 * r / major) - NoLongAxisBelow) / (FullRotationFrom - NoLongAxisBelow), 0, 1) : 0;
+        if (weight == 0)
         {
             return 0;
         }
 
         double rotation = -0.5 * Math.Atan2(2 * sxy, sxx - syy) * 180 / Math.PI;
-        return (float)(rotation <= -90 ? rotation + 180 : rotation);
+        return (float)((rotation <= -90 ? rotation + 180 : rotation) * weight);
     }
 
-    private static PlanePoint[] Resample(PlanePoint[] positions, int count) =>
-        ClosedLoop.Resample(positions, ClosedLoop.Cumulative(positions), count);
+    // The lap as a closed loop: the ends interpolated at its start and end, with the samples in between.
+    private TrackModel Loop(Candidate c)
+    {
+        List<TrackPoint> positions = [Point(PositionAt(c.Run, c.Start))];
+        for (int i = FirstAfter(c.Run, c.Start); i < c.Run.Count && c.Run[i].Timestamp < c.End; i++)
+        {
+            positions.Add(new TrackPoint(c.Run[i].X, c.Run[i].Y));
+        }
+
+        positions.Add(Point(PositionAt(c.Run, c.End)));
+        return new TrackModel(positions.ToArray(), _options.UnitsPerMetre);
+    }
 
     // The run with samples at or before the start and at or after the end, if there is one.
     private static IReadOnlyList<RawLocationSample>? RunCovering(CleanedTrace trace, DateTimeOffset start, DateTimeOffset end) =>
         trace.Runs.FirstOrDefault(r => r.Count > 0 && r[0].Timestamp <= start && r[^1].Timestamp >= end);
-
-    // The lap's positions: the ends interpolated at its start and end, with the samples in between.
-    private static PlanePoint[] LapPositions(IReadOnlyList<RawLocationSample> run, DateTimeOffset start, DateTimeOffset end)
-    {
-        List<PlanePoint> positions = [PositionAt(run, start)];
-        for (int i = FirstAfter(run, start); i < run.Count && run[i].Timestamp < end; i++)
-        {
-            positions.Add(new PlanePoint(run[i].X, run[i].Y));
-        }
-
-        positions.Add(PositionAt(run, end));
-        return [.. positions];
-    }
 
     // Distinct consecutive positions from the lap's start to its end: a parked car adds nothing.
     private static int DistinctPositions(IReadOnlyList<RawLocationSample> run, DateTimeOffset start, DateTimeOffset end)
@@ -387,8 +398,10 @@ public sealed class CentrelineBuilder
         return lo;
     }
 
-    private ReferenceLap Describe(Candidate c) =>
-        new(c.Lap.Driver, c.Lap.LapNumber, c.Lap.Duration!.Value, c.Length / _options.UnitsPerMetre);
+    private static TrackPoint Point(PlanePoint p) => new((float)p.X, (float)p.Y);
+
+    private ReferenceLap Describe(LapLoop l) =>
+        new(l.Lap.Driver, l.Lap.LapNumber, l.Lap.Duration!.Value, l.Loop.LapLength / _options.UnitsPerMetre);
 
     private static DateTimeOffset After(DateTimeOffset start, double seconds) =>
         start.AddTicks((long)Math.Round(seconds * TimeSpan.TicksPerSecond));
@@ -409,5 +422,9 @@ public sealed class CentrelineBuilder
         CultureInfo.InvariantCulture,
         $"No lap can outline the track. Of {laps} laps: {e.LapOne} lap 1, {e.PitInOrOut} in or out of the pits, {e.NoTiming} without timing, {e.Neutralised} under a safety car, VSC or red flag, {e.TooSlow} too slow, {e.NotCovered} without continuous positions, {e.TooFewPositions} with too few positions.");
 
-    private sealed record Candidate(RawLap Lap, PlanePoint[] Positions, double Length);
+    // A lap that passed every rule, and the cleaned run that covers it.
+    private sealed record Candidate(RawLap Lap, IReadOnlyList<RawLocationSample> Run, DateTimeOffset Start, DateTimeOffset End);
+
+    // A chosen lap as a closed loop of its positions.
+    private sealed record LapLoop(RawLap Lap, TrackModel Loop);
 }

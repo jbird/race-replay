@@ -16,17 +16,22 @@ internal static class CentrelineSessions
         [.. cars.Select((car, i) => car.WithDriver(new DriverNumber(i + 1)))];
 
     /// <summary>A session of the cars, with each car's true laps from lap 2 unless <paramref name="laps"/> are given.</summary>
-    public static RawSessionData Race(IReadOnlyList<SyntheticCar> cars, IEnumerable<RawLap>? laps = null, IReadOnlyList<RaceControlMessage>? raceControl = null) =>
+    public static RawSessionData Race(
+        IReadOnlyList<SyntheticCar> cars,
+        IEnumerable<RawLap>? laps = null,
+        IReadOnlyList<RaceControlMessage>? raceControl = null,
+        IReadOnlyList<RawPitStop>? pitStops = null,
+        IReadOnlyList<SessionResult>? results = null) =>
         new(
             new SessionInfo(SessionKey.Synthetic(1), 2026, "Race", "Race", "Test Grand Prix", "Test Park", SyntheticCar.DefaultStart),
             [.. cars.Select(c => new Driver(c.Driver, "D" + c.Driver.Value, "Test Driver", "Test", new RgbColour(1, 2, 3)))],
             cars.ToDictionary(c => c.Driver, c => c.Samples()),
             [.. laps ?? cars.SelectMany(c => c.Laps(firstLap: 2))],
-            [],
+            pitStops ?? [],
             raceControl ?? [],
             [],
             [],
-            []);
+            results ?? []);
 
     public static Dictionary<DriverNumber, CleanedTrace> Clean(RawSessionData raw) =>
         raw.Locations.ToDictionary(p => p.Key, p => s_cleaner.Clean(p.Key, p.Value));

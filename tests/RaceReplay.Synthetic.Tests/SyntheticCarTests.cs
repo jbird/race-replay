@@ -291,10 +291,21 @@ public sealed class SyntheticCarTests
         for (int i = 0; i < laps.Count; i++)
         {
             double start = 1.25 + (i * lapSeconds);
-            Assert.Equal(SyntheticCar.DefaultStart.AddTicks((long)Math.Round(start * TimeSpan.TicksPerSecond)), laps[i].Start);
-            Assert.Equal(lapSeconds, laps[i].Duration!.Value, 1e-9);
+            Assert.Equal(start, (laps[i].Start!.Value - SyntheticCar.DefaultStart).TotalSeconds, 1e-6); // whole ticks
+            Assert.Equal(lapSeconds, laps[i].Duration!.Value, 1e-7);
             Assert.Equal(new DriverNumber(7), laps[i].Driver);
             Assert.False(laps[i].IsPitOutLap);
+        }
+    }
+
+    [Fact]
+    public void Laps_EachStartsExactlyWhereTheLastEnds()
+    {
+        IReadOnlyList<RawLap> laps = SyntheticCar.ConstantSpeed(s_circle, Speed, startProgressMetres: -100).WithDuration(400).Laps();
+
+        for (int i = 1; i < laps.Count; i++)
+        {
+            Assert.Equal(laps[i - 1].Start!.Value.AddTicks((long)Math.Round(laps[i - 1].Duration!.Value * TimeSpan.TicksPerSecond)), laps[i].Start);
         }
     }
 
@@ -334,6 +345,9 @@ public sealed class SyntheticCarTests
         Assert.Throws<ArgumentOutOfRangeException>(() => car.WithSampleRate(0));
         Assert.Throws<ArgumentOutOfRangeException>(() => car.WithDropout(5, 5));
         Assert.Throws<ArgumentOutOfRangeException>(() => car.WithLateralOffset(double.NaN));
+        Assert.Throws<ArgumentOutOfRangeException>(() => car.WithLateralOffset(Radius));  // through the circle's centre
+        Assert.Throws<ArgumentOutOfRangeException>(() => car.WithLateralOffset(-Radius));
+        Assert.Equal(Radius - 1, car.WithLateralOffset(Radius - 1).LateralOffsetMetres);
     }
 
     private static double RadiusInUnits(RawLocationSample s) => Math.Sqrt(

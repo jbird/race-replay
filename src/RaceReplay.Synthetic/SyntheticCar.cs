@@ -92,9 +92,13 @@ public sealed record SyntheticCar
 
     /// <summary>
     /// Drives a line <paramref name="metres"/> to the left of the track's path (negative: to the right), as another
-    /// racing line would. Progress, and so the lap times, still run along the path.
+    /// racing line would. Progress, and so the lap times, still run along the path. The offset must stay inside the
+    /// tightest bend's radius, or the line would fold through the bend's centre.
     /// </summary>
-    public SyntheticCar WithLateralOffset(double metres) => this with { LateralOffsetMetres = Distance(metres) };
+    public SyntheticCar WithLateralOffset(double metres) =>
+        double.IsFinite(metres) && Math.Abs(metres) < Track.TightestRadiusMetres
+            ? this with { LateralOffsetMetres = metres }
+            : throw new ArgumentOutOfRangeException(nameof(metres), metres, "The offset must be finite and smaller than the tightest bend's radius.");
 
     /// <summary>
     /// Shifts each reported timestamp by Gaussian noise (standard deviation <paramref name="sdSeconds"/>, clamped to
@@ -143,6 +147,10 @@ public sealed record SyntheticCar
     /// is a whole number of laps) and lasts until the next crossing. The first is numbered
     /// <paramref name="firstLap"/>. Faults and timestamp jitter don't touch them.
     /// </summary>
+    /// <remarks>
+    /// Durations are whole ticks, and each lap starts exactly where the one before ends, as timing reports them. The
+    /// rounding drifts from the true crossings by at most half a tick a lap.
+    /// </remarks>
     public IReadOnlyList<RawLap> Laps(int firstLap = 1)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(firstLap, 1);
@@ -152,18 +160,18 @@ public sealed record SyntheticCar
         }
 
         double length = Track.LengthMetres;
-        double lapSeconds = length / SpeedMetresPerSecond;
+        long lapTicks = (long)Math.Round(length / SpeedMetresPerSecond * TimeSpan.TicksPerSecond);
+        double firstSeconds = ((Math.Ceiling(StartProgressMetres / length) * length) - StartProgressMetres) / SpeedMetresPerSecond;
+        DateTimeOffset start = Start.AddTicks((long)Math.Round(firstSeconds * TimeSpan.TicksPerSecond));
+        DateTimeOffset end = Start.AddTicks((long)Math.Round(DurationSeconds * TimeSpan.TicksPerSecond));
         List<RawLap> laps = [];
-        for (double k = Math.Ceiling(StartProgressMetres / length); ; k++)
+        while (start.AddTicks(lapTicks) <= end)
         {
-            double seconds = ((k * length) - StartProgressMetres) / SpeedMetresPerSecond;
-            if (seconds + lapSeconds > DurationSeconds + 1e-9)
-            {
-                return laps;
-            }
-
-            laps.Add(new RawLap(Driver, firstLap + laps.Count, Start.AddTicks((long)Math.Round(seconds * TimeSpan.TicksPerSecond)), lapSeconds, false));
+            laps.Add(new RawLap(Driver, firstLap + laps.Count, start, lapTicks / (double)TimeSpan.TicksPerSecond, false));
+            start = start.AddTicks(lapTicks);
         }
+
+        return laps;
     }
 
     /// <summary>The samples, in the order a provider would return them, faults included.</summary>

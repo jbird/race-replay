@@ -192,21 +192,21 @@ All `Time` values are **seconds since `ReplayTimeline.T0Utc`**. Absolute timesta
 
 ### 5.1 Reference laps
 
-A good centreline comes from clean, representative laps. `CentrelineBuilder` takes the session's laps and race control, and each car's cleaned runs from §4. A lap is a **candidate** when all of these hold:
+A good centreline comes from clean, representative laps. `CentrelineBuilder` takes the session's laps, pit stops, results and race control, and each car's cleaned runs from §4. A lap is a **candidate** when all of these hold:
 
-- it isn't lap 1, a pit-out lap or an in-lap (the driver's next lap is a pit-out lap);
+- it isn't lap 1, a pit-out lap or an in-lap. An in-lap is followed by a pit-out lap, or shares time with one of the driver's pit windows, [`date − lane_duration`, `date`] (§8.3). A driver who didn't finish may have retired into the pits, so their last lap counts as an in-lap too;
 - it has a `Start` and a positive `Duration`;
-- it doesn't overlap a **neutralised period**, ends included. The periods come from race control in spike S1's wording, matched on the whole message (ignoring case), so a VSC is never read as an SC ([S1](spikes/S1.md#race_control-wording)):
-  - safety car: `SAFETY CAR DEPLOYED` to `SAFETY CAR IN THIS LAP`, so the lap the safety car comes in on is excluded;
-  - virtual safety car: `VIRTUAL SAFETY CAR DEPLOYED` to `VIRTUAL SAFETY CAR ENDING`;
-  - red flag: `SESSION ABORTED` to the next `SESSION STARTED`.
+- it doesn't share time with a **neutralised period**; touching one at an instant isn't enough. The periods come from race control in spike S1's wording, matched on the whole message (ignoring case), so a VSC is never read as an SC ([S1](spikes/S1.md#race_control-wording)):
+  - safety car: `SAFETY CAR DEPLOYED` to the end of the lap it comes in on, which is the latest end of any lap in progress when `SAFETY CAR IN THIS LAP` is shown. Cars further back start that lap after the message, so the period has to cover theirs too;
+  - virtual safety car: `VIRTUAL SAFETY CAR DEPLOYED` to `VIRTUAL SAFETY CAR ENDING`, or until a safety car replaces it;
+  - red flag: `SESSION ABORTED` to the next `SESSION STARTED`. A red flag also ends any safety car or VSC, because the race restarts under its own procedure. At São Paulo 2024 the safety car out before the red flag was never called in, and a second one came out after the restart.
 
   A period that never closes runs to the end of the session.
 - its `Duration` is at most `MaxLapTimeRatio` (107 %) of the median of the **green-flag laps**, meaning those that pass the rules above;
 - it lies inside one cleaned run, which has samples at or before `Start` and at or after the lap's end;
 - it has at least `MinReferencePoints` distinct positions.
 
-Up to `ReferenceLapCount` (default 5) candidates are chosen, fastest first. Each driver with a candidate gets one before anyone gets a second. Ties go to the lower driver number, then the lower lap number. With fewer candidates the builder uses those there are; with none it fails, saying how many laps each rule excluded.
+Up to `ReferenceLapCount` (default 5) candidates are chosen, fastest first. Each driver with a candidate gets one before anyone gets a second. Ties go to the lower driver number, then the lower lap number, then the earlier start, so even duplicate lap records are chosen whatever their order. With fewer candidates the builder uses those there are; with none it fails, saying how many laps each rule excluded.
 
 ### 5.2 Building the polyline
 
@@ -235,7 +235,7 @@ The builder reports what it did for the build report: laps checked and how many 
 
 - **Start/finish (s = 0).** Lap `date_start` values are documented as approximate. The builder therefore collects every car's position at the start of every lap from lap 2 on, interpolated inside a cleaned run, and projects each onto the smoothed loop with a plain nearest-segment search. Lap 1 is left out because the grid sits behind the line (§10). Point 0 goes at the **circular median** of those *s* values: they are unwrapped around their circular mean, and the ordinary median is taken. A minority of starts anywhere else on the lap can't move it far, and starts either side of the loop's seam don't drag it halfway round. The final resampling starts exactly there, so point 0 is the median itself, not the nearest point to it.
 - **Direction.** *s* increases in the direction of travel by construction.
-- **Display rotation.** The default turns the centreline's principal axis (PCA) horizontal, laying the circuit out "landscape". It lies in (−90°, 90°], positive anticlockwise as the map draws it. A shape with no clear long axis, whose principal variances are within 1 % of each other, gets 0. A small checked-in override file, `config/track-orientation.json` keyed by OpenF1 `circuit_key`, allows broadcast-style orientation (RR-042). The meetings endpoint also links to third-party circuit info that includes a rotation, but its licensing is unclear, so it is not used by default.
+- **Display rotation.** The default turns the centreline's principal axis (PCA) horizontal, laying the circuit out "landscape". It lies in (−90°, 90°], positive anticlockwise as the map draws it. A nearly round shape has no reliable long axis, so the rotation fades in with the anisotropy (λ₁ − λ₂) / λ₁ of the principal variances: none below 1 %, in full from 10 %, and in proportion between. The angle therefore never jumps at a threshold. A small checked-in override file, `config/track-orientation.json` keyed by OpenF1 `circuit_key`, allows broadcast-style orientation (RR-042). The meetings endpoint also links to third-party circuit info that includes a rotation, but its licensing is unclear, so it is not used by default.
 
 ### 5.4 Spatial index
 

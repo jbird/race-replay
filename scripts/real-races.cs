@@ -16,8 +16,6 @@
 //   dotnet run scripts/real-races.cs -- <key> [<key> …]
 
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 using RaceReplay.Analysis;
@@ -36,7 +34,7 @@ foreach (int key in keys)
     (RawSessionData raw, string circuit) = Loader.Load(cache, key);
     Console.WriteLine($"== {raw.Session.Year} {raw.Session.MeetingName} ({circuit}, {key})");
 
-    // Cleaning (03 §4)
+    // Cleaning (03 §4), as ReplayBuilder does
     Dictionary<DriverNumber, CleanedTrace> traces = raw.Locations.ToDictionary(p => p.Key, p => cleaner.Clean(p.Key, p.Value));
     Console.WriteLine($"cleaning: {traces.Values.Sum(t => t.Counts.SamplesIn):N0} samples, " +
         $"{traces.Values.Sum(t => t.Counts.Placeholders):N0} placeholders, {traces.Values.Sum(t => t.Counts.Spikes)} spikes, " +
@@ -61,18 +59,37 @@ foreach (int key in keys)
 static string Describe(ReferenceLap l) => $"#{l.Driver.Value} lap {l.LapNumber} ({l.DurationSeconds:F3} s, {l.LengthMetres:N0} m)";
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The S1 cache, read-only: the same file names s1-explore.cs writes.
+// The S1 cache, read-only. Each response sits beside a .meta.json recording the URL it came from, so responses are
+// found by that URL rather than by re-deriving s1-explore.cs's file names.
 
-sealed class Cache(string root)
+sealed class Cache
 {
+    private readonly string _root;
+    private readonly Dictionary<string, string> _bodies = new(StringComparer.Ordinal); // path and query → response file
+
+    public Cache(string root)
+    {
+        _root = root;
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
+
+        foreach (string meta in Directory.EnumerateFiles(root, "*.meta.json"))
+        {
+            using JsonDocument record = JsonDocument.Parse(File.ReadAllBytes(meta));
+            if (record.RootElement.TryGetProperty("url", out JsonElement url) && url.GetString() is { } pathAndQuery)
+            {
+                _bodies[pathAndQuery] = meta[..^".meta.json".Length] + ".json";
+            }
+        }
+    }
+
     public T[] Get<T>(string pathAndQuery)
     {
-        string endpoint = pathAndQuery.Split('?')[0];
-        string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(pathAndQuery)))[..16].ToLowerInvariant();
-        string body = Path.Combine(root, $"{endpoint}_{hash}.json");
-        if (!File.Exists(body))
+        if (!_bodies.TryGetValue(pathAndQuery, out string? body) || !File.Exists(body))
         {
-            throw new FileNotFoundException($"{pathAndQuery} isn't cached in {root}. Run: dotnet run scripts/s1-explore.cs -- analyse <key>", body);
+            throw new FileNotFoundException($"{pathAndQuery} isn't cached in {_root}. Run: dotnet run scripts/s1-explore.cs -- analyse <key>");
         }
 
         return JsonSerializer.Deserialize<T[]>(File.ReadAllBytes(body), Json.Options) ?? [];
@@ -106,15 +123,15 @@ sealed record RaceControl(DateTimeOffset Date, string? Category, string? Flag, s
 
 static class Loader
 {
-    // Official lap lengths in metres (FIA/F1 published figures, current layouts), as in s1-explore.cs.
-    public static readonly Dictionary<string, double> OfficialLengthMetres = new(StringComparer.OrdinalIgnoreCase)
+    // Official lap lengths in metres by OpenF1 circuit_short_name, shared with s1-explore.cs (config/circuits.json).
+    public static readonly Dictionary<string, double> OfficialLengthMetres = OfficialLengths(Path.Combine("config", "circuits.json"));
+
+    private static Dictionary<string, double> OfficialLengths(string path)
     {
-        ["Sakhir"] = 5412, ["Jeddah"] = 6174, ["Melbourne"] = 5278, ["Suzuka"] = 5807, ["Shanghai"] = 5451,
-        ["Miami"] = 5412, ["Imola"] = 4909, ["Monte Carlo"] = 3337, ["Montreal"] = 4361, ["Catalunya"] = 4657,
-        ["Spielberg"] = 4318, ["Silverstone"] = 5891, ["Hungaroring"] = 4381, ["Spa-Francorchamps"] = 7004,
-        ["Zandvoort"] = 4259, ["Monza"] = 5793, ["Baku"] = 6003, ["Singapore"] = 4940, ["Austin"] = 5513,
-        ["Mexico City"] = 4304, ["Interlagos"] = 4309, ["Las Vegas"] = 6201, ["Lusail"] = 5419, ["Yas Marina Circuit"] = 5281,
-    };
+        using JsonDocument json = JsonDocument.Parse(File.ReadAllBytes(path));
+        return json.RootElement.GetProperty("lengthMetres").EnumerateObject()
+            .ToDictionary(p => p.Name, p => p.Value.GetDouble(), StringComparer.OrdinalIgnoreCase);
+    }
 
     public static (RawSessionData Raw, string Circuit) Load(Cache cache, int key)
     {

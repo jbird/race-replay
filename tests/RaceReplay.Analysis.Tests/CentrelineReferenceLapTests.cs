@@ -23,8 +23,10 @@ public sealed class CentrelineReferenceLapTests
         "lap 1",
         "pit out and in",
         "no timing",
+        "pit stop without a pit-out flag",
+        "retirement",
         "safety car",
-        "safety car ends on a lap start",
+        "safety car comes in as a lap starts",
         "safety car never comes in",
         "virtual safety car",
         "messages in any case",
@@ -39,6 +41,8 @@ public sealed class CentrelineReferenceLapTests
         SyntheticCar car = Car(laps: 6);
         RawLap[] laps = [.. car.Laps(firstLap: 2)]; // laps 2 to 7
         RaceControlMessage[] messages = [];
+        RawPitStop[] pitStops = [];
+        SessionResult[] results = [];
         int[] expected;
         LapExclusions excluded;
         switch (scenario)
@@ -51,15 +55,23 @@ public sealed class CentrelineReferenceLapTests
                 laps = Change(laps, 4, l => l with { IsPitOutLap = true });
                 (expected, excluded) = ([2, 5, 6, 7], new(0, 2, 0, 0, 0, 0, 0));
                 break;
+            case "pit stop without a pit-out flag": // 10 s in the pit lane, all inside lap 5
+                pitStops = [new RawPitStop(car.Driver, 5, SyntheticCar.DefaultStart.AddSeconds(Mid(5)), LaneDuration: 10, StopDuration: null)];
+                (expected, excluded) = ([2, 3, 4, 6, 7], new(0, 1, 0, 0, 0, 0, 0));
+                break;
+            case "retirement": // a driver who didn't finish may have ended their last lap in the pits
+                results = [new SessionResult(car.Driver, Position: null, Dnf: true, Dns: false, Dsq: false, LapsCompleted: 6)];
+                (expected, excluded) = ([2, 3, 4, 5, 6], new(0, 1, 0, 0, 0, 0, 0));
+                break;
             case "no timing":
                 laps = Change(Change(laps, 5, l => l with { Duration = null }), 6, l => l with { Start = null });
                 (expected, excluded) = ([2, 3, 4, 7], new(0, 0, 2, 0, 0, 0, 0));
                 break;
-            case "safety car": // the lap it comes in on is still neutralised
+            case "safety car": // it runs to the end of the lap it comes in on; lap 5 starts as it ends
                 messages = [Message(Mid(3), "SAFETY CAR DEPLOYED"), Message(Mid(4), "SAFETY CAR IN THIS LAP")];
                 (expected, excluded) = ([2, 5, 6, 7], new(0, 0, 0, 2, 0, 0, 0));
                 break;
-            case "safety car ends on a lap start": // overlap includes the end points
+            case "safety car comes in as a lap starts": // lap 5 is the one under way, so it's the last neutralised
                 messages = [Message(Mid(3), "SAFETY CAR DEPLOYED"), new(laps.Single(l => l.LapNumber == 5).Start!.Value, "SafetyCar", null, null, null, null, "SAFETY CAR IN THIS LAP")];
                 (expected, excluded) = ([2, 6, 7], new(0, 0, 0, 3, 0, 0, 0));
                 break;
@@ -91,11 +103,48 @@ public sealed class CentrelineReferenceLapTests
                 throw new ArgumentOutOfRangeException(nameof(scenario));
         }
 
-        CentrelineDiagnostics d = Build(Race([car], laps, messages), s_all).Diagnostics;
+        CentrelineDiagnostics d = Build(Race([car], laps, messages, pitStops, results), s_all).Diagnostics;
 
         Assert.Equal(expected, d.ReferenceLaps.Select(l => l.LapNumber).Order());
         Assert.Equal(excluded, d.Excluded);
         Assert.Equal(laps.Length, d.LapsChecked);
+    }
+
+    [Fact]
+    public void Build_SafetyCarComesIn_CarsFurtherBackHaveTheirLastSafetyCarLapNeutralisedToo()
+    {
+        // Driver 2 runs 9 s behind driver 1. The safety car comes in 3 s into driver 1's lap 4, while driver 2 is
+        // still on lap 3: driver 2's lap 4, started after the message, is still behind the safety car.
+        SyntheticCar leader = Car(laps: 6).WithDriver(new DriverNumber(1));
+        SyntheticCar behind = CentrelineBuilderTests.Car(s_circle, Speed, laps: 6, start: -Before - (9 * Speed)).WithDriver(new DriverNumber(2));
+        RawLap[] laps = [.. leader.Laps(firstLap: 2), .. behind.Laps(firstLap: 2)];
+        DateTimeOffset lap4 = laps.Single(l => l.Driver == leader.Driver && l.LapNumber == 4).Start!.Value;
+        RaceControlMessage[] messages =
+        [
+            Message(Mid(3), "SAFETY CAR DEPLOYED"),
+            new(lap4.AddSeconds(3), "SafetyCar", null, null, null, null, "SAFETY CAR IN THIS LAP"),
+        ];
+
+        CentrelineDiagnostics d = Build(Race([leader, behind], laps, messages), s_all).Diagnostics;
+
+        Assert.DoesNotContain(d.ReferenceLaps, l => l.Driver == behind.Driver && l.LapNumber == 4);
+        Assert.Equal(4, d.Excluded.Neutralised); // laps 3 and 4 of both
+    }
+
+    [Fact]
+    public void Build_DuplicateLapRecords_ChosenWhateverTheirOrder()
+    {
+        // Lap 2, the one chosen, reported twice, the copy starting 0.4 s late: the earlier start wins either way round.
+        SyntheticCar car = Car(laps: 3);
+        RawLap[] laps = [.. car.Laps(firstLap: 2)];
+        RawLap copy = laps[0] with { Start = laps[0].Start!.Value.AddSeconds(0.4) };
+        CentrelineOptions one = new() { ReferenceLapCount = 1 };
+
+        CentrelineResult a = Build(Race([car], [.. laps, copy]), one);
+        CentrelineResult b = Build(Race([car], [copy, .. laps.AsEnumerable().Reverse()]), one);
+
+        Assert.Equal(a.Track.Centreline.ToArray(), b.Track.Centreline.ToArray());
+        Assert.Equal(a.Diagnostics.ReferenceLaps, b.Diagnostics.ReferenceLaps);
     }
 
     [Fact]

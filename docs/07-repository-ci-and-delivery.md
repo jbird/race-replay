@@ -108,7 +108,7 @@ race-replay/
 ├─ config/
 │  ├─ demo-races.json              # seeds and titles of the synthetic demo races
 │  ├─ track-orientation.json       # optional display rotation per circuit_key
-│  └─ circuits.json                # optional reference lap lengths for validation
+│  └─ circuits.json                # official lap lengths by OpenF1 circuit_short_name, for validation and scripts
 ├─ docs/                           # this document set + ADRs + spikes/
 │  └─ schema/                      # generated JSON Schemas (golden-tested; published with the site)
 ├─ scripts/

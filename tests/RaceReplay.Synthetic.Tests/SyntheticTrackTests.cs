@@ -76,7 +76,8 @@ public sealed class SyntheticTrackTests
         }
 
         // Turning right: the heading falls through the first bend.
-        Assert.True(clockwise.HeadingAt(Straight) < clockwise.HeadingAt(Straight / 2));
+        double turn = clockwise.HeadingAt(Straight) - clockwise.HeadingAt(Straight / 2);
+        Assert.True(Math.Atan2(Math.Sin(turn), Math.Cos(turn)) < 0);
     }
 
     [Fact]
@@ -89,8 +90,35 @@ public sealed class SyntheticTrackTests
         {
             (double x, double y) = Metres(s_stadium.PointAt(m));
             Assert.Equal((-y, x), Metres(rotated.PointAt(m)), new PointComparer());
-            Assert.Equal(s_stadium.HeadingAt(m) + (Math.PI / 2), rotated.HeadingAt(m), Tolerance);
+            double turn = rotated.HeadingAt(m) - s_stadium.HeadingAt(m);
+            Assert.Equal(Math.PI / 2, Math.Atan2(Math.Sin(turn), Math.Cos(turn)), Tolerance);
         }
+    }
+
+    [Fact]
+    public void HeadingAt_IsAlwaysWithinOneTurn()
+    {
+        SyntheticTrack[] tracks = [s_stadium, s_stadium.Clockwise(), s_stadium.Rotated(300), SyntheticTrack.Circle(Radius).Rotated(-200)];
+
+        foreach (SyntheticTrack track in tracks)
+        {
+            for (double m = 0; m < track.LengthMetres; m += 7)
+            {
+                Assert.InRange(track.HeadingAt(m), 0, 2 * Math.PI);
+                Assert.True(track.HeadingAt(m) < 2 * Math.PI);
+            }
+        }
+
+        // The end of the lap heads the same way as its start.
+        Assert.Equal(s_stadium.HeadingAt(0), s_stadium.HeadingAt(s_stadium.LengthMetres - 1e-9), Tolerance);
+    }
+
+    [Fact]
+    public void TightestRadius_IsTheBendRadius_ThroughEveryTransform()
+    {
+        Assert.Equal(Radius, s_stadium.TightestRadiusMetres);
+        Assert.Equal(Radius, s_stadium.Clockwise().Rotated(45).TightestRadiusMetres);
+        Assert.Equal(250, SyntheticTrack.Circle(250).TightestRadiusMetres);
     }
 
     [Fact]

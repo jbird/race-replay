@@ -25,6 +25,9 @@ public abstract class SyntheticTrack
     /// <summary>The length of one lap, in metres.</summary>
     public abstract double LengthMetres { get; }
 
+    /// <summary>The radius of the tightest bend, in metres: a parallel line can't run that far to its inside.</summary>
+    public abstract double TightestRadiusMetres { get; }
+
     /// <summary>A circle of <paramref name="radiusMetres"/>, driven anticlockwise from its rightmost point.</summary>
     public static SyntheticTrack Circle(double radiusMetres)
     {
@@ -77,11 +80,17 @@ public abstract class SyntheticTrack
         return ((CentreXMetres + x) * UnitsPerMetre, (CentreYMetres + y) * UnitsPerMetre);
     }
 
-    /// <summary>The direction of travel <paramref name="metres"/> along the track, in radians anticlockwise from +x.</summary>
+    /// <summary>The direction of travel <paramref name="metres"/> along the track, in radians anticlockwise from +x, in [0, 2π).</summary>
     public double HeadingAt(double metres)
     {
         double along = metres % LengthMetres;
-        return PoseOnLap(along < 0 ? along + LengthMetres : along).Heading;
+        double heading = PoseOnLap(along < 0 ? along + LengthMetres : along).Heading % (2 * Math.PI);
+        if (heading < 0)
+        {
+            heading += 2 * Math.PI;
+        }
+
+        return heading < 2 * Math.PI ? heading : 0; // a tiny negative heading rounds up to a whole turn
     }
 
     /// <summary>Where the car is <paramref name="metres"/> along one lap: metres from the centre, and the heading.</summary>
@@ -92,6 +101,8 @@ public abstract class SyntheticTrack
     private sealed class CircleTrack(double radius) : SyntheticTrack
     {
         public override double LengthMetres { get; } = 2 * Math.PI * radius;
+
+        public override double TightestRadiusMetres => radius;
 
         private protected override Pose PoseOnLap(double metres)
         {
@@ -106,6 +117,8 @@ public abstract class SyntheticTrack
         private readonly double _bend = Math.PI * radius;
 
         public override double LengthMetres { get; } = (2 * straight) + (2 * Math.PI * radius);
+
+        public override double TightestRadiusMetres => radius;
 
         private protected override Pose PoseOnLap(double metres)
         {
@@ -145,6 +158,8 @@ public abstract class SyntheticTrack
     {
         public override double LengthMetres => inner.LengthMetres;
 
+        public override double TightestRadiusMetres => inner.TightestRadiusMetres;
+
         private protected override Pose PoseOnLap(double metres)
         {
             Pose p = inner.PoseOnLap(metres);
@@ -158,6 +173,8 @@ public abstract class SyntheticTrack
         private readonly double _sin = Math.Sin(radians);
 
         public override double LengthMetres => inner.LengthMetres;
+
+        public override double TightestRadiusMetres => inner.TightestRadiusMetres;
 
         private protected override Pose PoseOnLap(double metres)
         {

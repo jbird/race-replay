@@ -200,7 +200,10 @@ internal sealed record Built(string Name, RaceLength Length, int Samples, Replay
         SyntheticRaceOptions options = SyntheticRaceOptions.Default with { Laps = length.Laps, CoolDownSeconds = length.CoolDownSeconds };
         RawSessionData raw = new SyntheticRaceGenerator(options).Generate(seed).Raw;
         ReplayBuilder builder = new(
-            new CentrelineBuilder(new CentrelineOptions()), new TimelineResampler(new ResamplingOptions()), s_fixedTime);
+            new LocationCleaner(new CleaningOptions()),
+            new CentrelineBuilder(new CentrelineOptions()),
+            new TimelineResampler(new ResamplingOptions()),
+            s_fixedTime);
         return builder.Build(raw, new BuildOptions("s2-variants")).Replay;
     }
 

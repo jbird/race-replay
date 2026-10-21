@@ -72,6 +72,17 @@ public sealed class TrackModel
     /// <summary>Rotation applied when drawing, so the circuit appears in its familiar orientation.</summary>
     public float DisplayRotationDegrees { get; }
 
+    /// <summary>
+    /// The arc length from point 0 to point <paramref name="index"/>. <c>ArcLengthAt(Centreline.Length)</c> closes the
+    /// loop and equals <see cref="LapLength"/>, so segment i runs from <c>ArcLengthAt(i)</c> to <c>ArcLengthAt(i + 1)</c>.
+    /// </summary>
+    public double ArcLengthAt(int index)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _cumulative.Length - 1);
+        return _cumulative[index];
+    }
+
     /// <summary>The point at arc length <paramref name="s"/>, wrapped onto one lap.</summary>
     public TrackPoint PointAt(double s)
     {

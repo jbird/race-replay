@@ -1,0 +1,30 @@
+{
+  "keyedBy": "OpenF1 circuit_short_name",
+  "source": "Official lap lengths published by the FIA and F1, current layouts",
+  "lengthMetres": {
+    "Austin": 5513,
+    "Baku": 6003,
+    "Catalunya": 4657,
+    "Hungaroring": 4381,
+    "Imola": 4909,
+    "Interlagos": 4309,
+    "Jeddah": 6174,
+    "Las Vegas": 6201,
+    "Lusail": 5419,
+    "Melbourne": 5278,
+    "Mexico City": 4304,
+    "Miami": 5412,
+    "Monte Carlo": 3337,
+    "Montreal": 4361,
+    "Monza": 5793,
+    "Sakhir": 5412,
+    "Shanghai": 5451,
+    "Silverstone": 5891,
+    "Singapore": 4940,
+    "Spa-Francorchamps": 7004,
+    "Spielberg": 4318,
+    "Suzuka": 5807,
+    "Yas Marina Circuit": 5281,
+    "Zandvoort": 4259
+  }
+}

@@ -38,6 +38,22 @@ public sealed class TrackModelTests
         Assert.Equal(y, point.Y, Tolerance);
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 100)]
+    [InlineData(3, 300)]
+    [InlineData(4, 400)] // the closing segment ends the lap
+    public void ArcLengthAt_Point_IsTheDistanceFromPointZero(int index, double expected)
+    {
+        Assert.Equal(expected, new TrackModel(s_square).ArcLengthAt(index), 1e-9);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(5)]
+    public void ArcLengthAt_OutsideTheLoop_Throws(int index) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TrackModel(s_square).ArcLengthAt(index));
+
     [Fact]
     public void Constructor_SourceArrayChangedAfterwards_ModelIsUnaffected()
     {

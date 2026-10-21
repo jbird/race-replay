@@ -6,4 +6,8 @@
   <ItemGroup>
     <PackageReference Include="System.Numerics.Tensors" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RaceReplay.Analysis.Tests" />
+  </ItemGroup>
 </Project>

@@ -255,15 +255,16 @@ sealed record LocationFetch(int Driver, long Bytes, long Milliseconds, int Sampl
 
 sealed class Race
 {
-    // Official lap lengths in metres (FIA/F1 published figures, current layouts) for the units check (docs/03 §3).
-    public static readonly Dictionary<string, double> OfficialLengthMetres = new(StringComparer.OrdinalIgnoreCase)
+    // Official lap lengths in metres by OpenF1 circuit_short_name, for the units check (docs/03 §3). Shared with
+    // real-races.cs through config/circuits.json.
+    public static readonly Dictionary<string, double> OfficialLengthMetres = OfficialLengths(Path.Combine("config", "circuits.json"));
+
+    private static Dictionary<string, double> OfficialLengths(string path)
     {
-        ["Sakhir"] = 5412, ["Jeddah"] = 6174, ["Melbourne"] = 5278, ["Suzuka"] = 5807, ["Shanghai"] = 5451,
-        ["Miami"] = 5412, ["Imola"] = 4909, ["Monte Carlo"] = 3337, ["Montreal"] = 4361, ["Catalunya"] = 4657,
-        ["Spielberg"] = 4318, ["Silverstone"] = 5891, ["Hungaroring"] = 4381, ["Spa-Francorchamps"] = 7004,
-        ["Zandvoort"] = 4259, ["Monza"] = 5793, ["Baku"] = 6003, ["Singapore"] = 4940, ["Austin"] = 5513,
-        ["Mexico City"] = 4304, ["Interlagos"] = 4309, ["Las Vegas"] = 6201, ["Lusail"] = 5419, ["Yas Marina Circuit"] = 5281,
-    };
+        using JsonDocument json = JsonDocument.Parse(File.ReadAllBytes(path));
+        return json.RootElement.GetProperty("lengthMetres").EnumerateObject()
+            .ToDictionary(p => p.Name, p => p.Value.GetDouble(), StringComparer.OrdinalIgnoreCase);
+    }
 
     public required Session Session { get; init; }
 

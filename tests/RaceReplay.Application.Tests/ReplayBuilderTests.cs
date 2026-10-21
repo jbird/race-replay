@@ -136,6 +136,37 @@ public sealed class ReplayBuilderTests
     }
 
     [Fact]
+    public void Build_SampleFiledUnderAnotherDriver_ThrowsInsufficientData()
+    {
+        Dictionary<DriverNumber, IReadOnlyList<RawLocationSample>> locations = new(s_race.Raw.Locations);
+        DriverNumber first = s_race.Raw.Drivers[0].Number, second = s_race.Raw.Drivers[1].Number;
+        locations[first] = [.. locations[first], locations[second][^1]];
+
+        InsufficientDataException e = Assert.Throws<InsufficientDataException>(() => Build(s_race.Raw with { Locations = locations }));
+
+        Assert.Contains($"driver {first} include one from driver {second}", e.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_PlaceholderSample_IsNotDrawn()
+    {
+        // OpenF1's (0, 0, 0) placeholder mid-trace: cleaned away, so no grid point is drawn at the origin (docs/03 §4).
+        Dictionary<DriverNumber, IReadOnlyList<RawLocationSample>> locations = new(s_race.Raw.Locations);
+        DriverNumber driver = s_race.Raw.Drivers[0].Number;
+        RawLocationSample[] samples = [.. locations[driver]];
+        samples[200] = samples[200] with { X = 0, Y = 0, Z = 0 };
+        locations[driver] = samples;
+
+        ReplaySession replay = Build(s_race.Raw with { Locations = locations });
+
+        CarChannels car = replay.Cars[replay.IndexOf(driver)];
+        for (int k = 0; k < replay.Timeline.SampleCount; k++)
+        {
+            Assert.False(car.Valid[k] && car.X.Span[k] == 0 && car.Y.Span[k] == 0, $"grid point {k} is at the origin");
+        }
+    }
+
+    [Fact]
     public void Build_SameInputTwice_SameReplay()
     {
         ReplaySession a = Build(s_race.Raw), b = Build(s_race.Raw);
@@ -148,7 +179,10 @@ public sealed class ReplayBuilderTests
     private static ReplaySession Build(RawSessionData raw)
     {
         ReplayBuilder builder = new(
-            new CentrelineBuilder(new CentrelineOptions()), new TimelineResampler(new ResamplingOptions()), new FakeTimeProvider(s_now));
+            new LocationCleaner(new CleaningOptions()),
+            new CentrelineBuilder(new CentrelineOptions()),
+            new TimelineResampler(new ResamplingOptions()),
+            new FakeTimeProvider(s_now));
         return builder.Build(raw, new BuildOptions("race-replay test")).Replay;
     }
 

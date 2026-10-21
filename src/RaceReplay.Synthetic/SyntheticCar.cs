@@ -52,6 +52,9 @@ public sealed record SyntheticCar
     /// <summary>Seconds from the first sample to the last.</summary>
     public double DurationSeconds { get; private init; } = 60;
 
+    /// <summary>How far the car's line runs beside the track's path, in metres, positive to the left of travel.</summary>
+    public double LateralOffsetMetres { get; private init; }
+
     private Jitter? TimestampJitter { get; init; }
 
     private IReadOnlyList<Fault> Faults { get; init; } = [];
@@ -86,6 +89,16 @@ public sealed record SyntheticCar
         double.IsFinite(hz) && hz > 0
             ? this with { SampleRateHz = hz }
             : throw new ArgumentOutOfRangeException(nameof(hz), hz, "The sample rate must be positive.");
+
+    /// <summary>
+    /// Drives a line <paramref name="metres"/> to the left of the track's path (negative: to the right), as another
+    /// racing line would. Progress, and so the lap times, still run along the path. The offset must stay inside the
+    /// tightest bend's radius, or the line would fold through the bend's centre.
+    /// </summary>
+    public SyntheticCar WithLateralOffset(double metres) =>
+        double.IsFinite(metres) && Math.Abs(metres) < Track.TightestRadiusMetres
+            ? this with { LateralOffsetMetres = metres }
+            : throw new ArgumentOutOfRangeException(nameof(metres), metres, "The offset must be finite and smaller than the tightest bend's radius.");
 
     /// <summary>
     /// Shifts each reported timestamp by Gaussian noise (standard deviation <paramref name="sdSeconds"/>, clamped to
@@ -129,6 +142,38 @@ public sealed record SyntheticCar
     /// <summary>The number of samples in the clean trace.</summary>
     public int SampleCount => (int)Math.Floor((DurationSeconds * SampleRateHz) + 1e-9) + 1;
 
+    /// <summary>
+    /// A lap record for every complete lap in the trace: each starts when the car truly crosses the line (its progress
+    /// is a whole number of laps) and lasts until the next crossing. The first is numbered
+    /// <paramref name="firstLap"/>. Faults and timestamp jitter don't touch them.
+    /// </summary>
+    /// <remarks>
+    /// Durations are whole ticks, and each lap starts exactly where the one before ends, as timing reports them. The
+    /// rounding drifts from the true crossings by at most half a tick a lap.
+    /// </remarks>
+    public IReadOnlyList<RawLap> Laps(int firstLap = 1)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(firstLap, 1);
+        if (SpeedMetresPerSecond == 0)
+        {
+            return [];
+        }
+
+        double length = Track.LengthMetres;
+        long lapTicks = (long)Math.Round(length / SpeedMetresPerSecond * TimeSpan.TicksPerSecond);
+        double firstSeconds = ((Math.Ceiling(StartProgressMetres / length) * length) - StartProgressMetres) / SpeedMetresPerSecond;
+        DateTimeOffset start = Start.AddTicks((long)Math.Round(firstSeconds * TimeSpan.TicksPerSecond));
+        DateTimeOffset end = Start.AddTicks((long)Math.Round(DurationSeconds * TimeSpan.TicksPerSecond));
+        List<RawLap> laps = [];
+        while (start.AddTicks(lapTicks) <= end)
+        {
+            laps.Add(new RawLap(Driver, firstLap + laps.Count, start, lapTicks / (double)TimeSpan.TicksPerSecond, false));
+            start = start.AddTicks(lapTicks);
+        }
+
+        return laps;
+    }
+
     /// <summary>The samples, in the order a provider would return them, faults included.</summary>
     /// <exception cref="InvalidOperationException">
     /// A fault refers to a sample the trace doesn't have, or two faults touch the same sample. Each sample takes at most
@@ -153,7 +198,7 @@ public sealed record SyntheticCar
             double reported = random is null
                 ? time
                 : time + Math.Clamp(random.NextGaussian() * jitter!.SdSeconds, -jitter.MaxSeconds, jitter.MaxSeconds);
-            (double x, double y) = Track.PointAt(StartProgressMetres + (SpeedMetresPerSecond * time));
+            (double x, double y) = Track.PointAt(StartProgressMetres + (SpeedMetresPerSecond * time), LateralOffsetMetres);
             slots[i] = [Sample(reported, x, y, Altitude)];
         }
 

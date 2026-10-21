@@ -169,24 +169,43 @@ public sealed class CentrelineBuilderTests
     [InlineData(0)]
     [InlineData(30)]
     [InlineData(-60)]
+    [InlineData(120)]
+    [InlineData(-150)]
     public void Build_Stadium_DisplayRotationTurnsTheStraightsHorizontal(double degrees)
     {
+        // The turn undoes the track's own, up to half a turn either way, so point 0 (halfway along the lower straight)
+        // is back below the centre whichever way the track was turned.
         TrackModel track = Build(Race(Numbered(Car(s_stadium.Rotated(degrees), 60, laps: 3)))).Track;
 
         Assert.Equal(-degrees, track.DisplayRotationDegrees, 1.0);
     }
 
     [Fact]
-    public void Build_NearlyRoundShapes_RotationFadesInWithTheLongAxis()
+    public void Build_LongAxisEitherSideOfVertical_DrawnTheSameWayUp()
     {
-        // Stadiums turned 30°, from round to clearly long: the rotation grows steadily from 0 to the full −30°
-        // instead of jumping, because a nearly round shape's axis is unreliable.
+        // Long axes at 89° and 91° need nearly the same turn, not turns half a turn apart, so the map doesn't turn
+        // upside down as the axis passes vertical. Point 0, on the lower straight, is drawn below the centre both times.
+        double[] axes = [89, 91];
+        TrackModel[] tracks = [.. axes.Select(d => Build(Race(Numbered(Car(s_stadium.Rotated(d), 60, laps: 3)))).Track)];
+
+        Assert.Equal(-89, tracks[0].DisplayRotationDegrees, 1.0);
+        Assert.Equal(-91, tracks[1].DisplayRotationDegrees, 1.0);
+        Assert.All(tracks, t => Assert.Equal(-Bend, Drawn(t, 0).Y, PathTolerance));
+    }
+
+    [Theory]
+    [InlineData(30)]
+    [InlineData(150)]
+    public void Build_NearlyRoundShapes_RotationFadesInWithTheLongAxis(double degrees)
+    {
+        // Stadiums turned 30° and 150°, from round to clearly long: the rotation grows steadily from 0 to the full
+        // turn back, half turn included, instead of jumping, because a nearly round shape's axis is unreliable.
         double[] straights = [0, 4, 8, 12, 16, 400];
-        float[] rotations = [.. straights.Select(s => Build(Race(Numbered(Car(SyntheticTrack.Stadium(s, Bend).Rotated(30), 60, laps: 3)))).Track.DisplayRotationDegrees)];
+        float[] rotations = [.. straights.Select(s => Build(Race(Numbered(Car(SyntheticTrack.Stadium(s, Bend).Rotated(degrees), 60, laps: 3)))).Track.DisplayRotationDegrees)];
 
         Assert.Equal(0, rotations[0]);
-        Assert.Equal(-30, rotations[^1], 1.0);
-        Assert.Contains(rotations, r => r is < -1 and > -29); // part-way somewhere on the ramp
+        Assert.Equal(-degrees, rotations[^1], 1.0);
+        Assert.Contains(rotations, r => r < -1 && r > 1 - degrees); // part-way somewhere on the ramp
         for (int i = 1; i < rotations.Length; i++)
         {
             Assert.True(rotations[i] <= rotations[i - 1] + 0.5f, $"straights {straights[i]} m turn less than {straights[i - 1]} m");
@@ -290,6 +309,14 @@ public sealed class CentrelineBuilderTests
     /// <paramref name="start"/> metres round (before the line when negative).</summary>
     internal static SyntheticCar Car(SyntheticTrack track, double speed, int laps, double start = -150) =>
         SyntheticCar.ConstantSpeed(track, speed, start).WithDuration((((laps + 0.5) * track.LengthMetres) - start) / speed);
+
+    // Centreline point i in metres from the track's centre, turned by the display rotation as the map draws it.
+    private static (double X, double Y) Drawn(TrackModel track, int i)
+    {
+        (double x, double y) = Metres(track.Centreline.Span[i]);
+        double radians = track.DisplayRotationDegrees * Math.PI / 180;
+        return ((x * Math.Cos(radians)) - (y * Math.Sin(radians)), (x * Math.Sin(radians)) + (y * Math.Cos(radians)));
+    }
 
     private static double Length(TrackPoint a, TrackPoint b) => Math.Sqrt(Math.Pow(b.X - (double)a.X, 2) + Math.Pow(b.Y - (double)a.Y, 2));
 

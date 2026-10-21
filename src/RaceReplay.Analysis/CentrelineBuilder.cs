@@ -298,8 +298,10 @@ public sealed class CentrelineBuilder
         return (median < 0 ? median + length : median, spread);
     }
 
-    // The rotation, in degrees anticlockwise and in (−90, 90], that turns the principal axis horizontal. A nearly round
-    // shape has no reliable axis, so the rotation fades in with the anisotropy instead of jumping at a threshold.
+    // The rotation, in degrees anticlockwise and in (−180, 180], that turns the principal axis horizontal with point 0
+    // below the centroid. Two turns half a turn apart level the axis; choosing by where the start/finish line ends up,
+    // not by the angle, keeps the map the same way up as the axis passes vertical. A nearly round shape has no reliable
+    // axis, so the rotation fades in with the anisotropy instead of jumping at a threshold.
     private static float LandscapeRotation(TrackPoint[] points)
     {
         double mx = points.Average(p => (double)p.X), my = points.Average(p => (double)p.Y);
@@ -319,8 +321,10 @@ public sealed class CentrelineBuilder
             return 0;
         }
 
-        double rotation = -0.5 * Math.Atan2(2 * sxy, sxx - syy) * 180 / Math.PI;
-        return (float)((rotation <= -90 ? rotation + 180 : rotation) * weight);
+        double level = -0.5 * Math.Atan2(2 * sxy, sxx - syy); // radians, in [−π/2, π/2)
+        double startY = (Math.Sin(level) * (points[0].X - mx)) + (Math.Cos(level) * (points[0].Y - my));
+        double rotation = (startY > 0 ? level + (level > 0 ? -Math.PI : Math.PI) : level) * 180 / Math.PI;
+        return (float)(rotation * weight);
     }
 
     // The lap as a closed loop: the ends interpolated at its start and end, with the samples in between.
